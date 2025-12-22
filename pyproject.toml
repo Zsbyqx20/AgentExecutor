@@ -4,4 +4,39 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "adbutils>=2.12.0",
+    "aiohttp>=3.13.2",
+    "httpx[socks]>=0.28.1",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "rich>=14.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+    "openai>=2.14.0",
+    "poethepoet>=0.38.0",
+    "pyright>=1.1.407",
+    "ruff>=0.14.10",
+]
+
+[tool.poe.tasks]
+_ruff_check_format = "ruff format . --check --preview"
+_ruff_check = "ruff check . --preview"
+_pyright = "pyright"
+_ruff_sort_imports = "ruff check --select I --fix . --preview"
+_ruff_format_code = "ruff format . --preview"
+fix = "ruff check --fix . --preview"
+fix_unsafe = "ruff check --preview --fix --unsafe-fixes ."
+release_preview = "semantic-release -v --noop version"
+release = "semantic-release version --push --vcs-release"
+
+[[tool.poe.tasks.format]]
+sequence = ['_ruff_sort_imports', '_ruff_format_code']
+ignore_fail = 'return_non_zero'
+
+[[tool.poe.tasks.check]]
+sequence = ['_ruff_check_format', '_ruff_check', '_pyright']
+ignore_fail = 'return_non_zero'
