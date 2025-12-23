@@ -1,10 +1,13 @@
 import re
+import time
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Literal, TypedDict
 
 from .api import APIClient
 from .device import Device
+from .icons import CHECK, GEAR, MAGIC, ROCKET, ROTATE_LEFT, THOUGHT, TIMES, TROPHY
+from .logger import get_logger
 
 
 class Action(TypedDict):
@@ -75,10 +78,15 @@ class DoubaoAgent(Agent):
         self.language = Language[language.upper()]
         self.client = APIClient()
         self.history = []
+        self.logger = get_logger(__name__)
 
     def reset(self, **kwargs) -> None:
         self.task_name = kwargs.get("task_name", "")
         self.history = []
+        self.logger.info(
+            f"[bold magenta]{ROTATE_LEFT} Agent reset[/]",
+            extra={"markup": True},
+        )
 
     def _normalize_coordinates(self, x: int, y: int) -> tuple[int, int]:
         width, height = self.window_size
@@ -94,6 +102,19 @@ class DoubaoAgent(Agent):
 
         thought = thought_match.group(1).strip() if thought_match else ""
         action_text = action_match.group(1).strip() if action_match else ""
+
+        # Log thought if present
+        if thought:
+            self.logger.info(
+                "\n[bold cyan]{} Thought[/]\n[italic dim]{}[/]\n".format(
+                    THOUGHT, thought
+                ),
+                extra={"markup": True},
+            )
+
+        self.logger.debug(
+            f"Parsing action from response: {action_text[:100] if action_text else '(empty)'}..."
+        )
 
         action_type = ""
         params = {}
@@ -172,33 +193,70 @@ class DoubaoAgent(Agent):
         action_type = action["action_type"]
         params = action["params"]
 
+        # Color coding for different action types
+        action_colors = {
+            "click": "green",
+            "long_press": "green",
+            "type": "blue",
+            "scroll": "yellow",
+            "drag": "purple",
+            "open_app": "cyan",
+            "press_home": "magenta",
+            "press_back": "magenta",
+            "finished": "bold green",
+        }
+        color = action_colors.get(action_type, "white")
+
+        self.logger.info(
+            f"[{color}]{GEAR} {action_type}[/]",
+            extra={"markup": True},
+        )
+        self.logger.debug(f"Action parameters: {params}")
+
         if action_type == "click":
             x, y = self._normalize_coordinates(*params["point"])
+            self.logger.debug(f"Normalized coordinates: ({x}, {y})")
             self.device.press(x, y)
         elif action_type == "long_press":
             x, y = self._normalize_coordinates(*params["point"])
+            self.logger.debug(f"Normalized coordinates: ({x}, {y})")
             self.device.long_press(x, y, duration=1.0)
         elif action_type == "type":
+            content = params["content"]
+            display_content = content[:50] + "..." if len(content) > 50 else content
+            self.logger.debug(f'Typing: "{display_content}"')
             self.device.type_text(params["content"])
         elif action_type == "scroll":
             x, y = self._normalize_coordinates(*params["point"])
             direction = params["direction"]
             distance = self.window_size.height // 2
+            self.logger.debug(f"Scroll direction: {direction}, distance: {distance}")
             self.device.scroll(x, y, Direction[direction.upper()], distance)
         elif action_type == "open_app":
+            self.logger.debug(f"Opening app: {params['app_name']}")
             self.device.open_app(params["app_name"])
         elif action_type == "drag":
             start_x, start_y = self._normalize_coordinates(*params["start_point"])
             end_x, end_y = self._normalize_coordinates(*params["end_point"])
+            self.logger.debug(f"Drag: ({start_x}, {start_y}) → ({end_x}, {end_y})")
             self.device.drag(start_x, start_y, end_x, end_y, duration=1.0)
         elif action_type == "press_home":
             self.device.navigate_home()
         elif action_type == "press_back":
             self.device.navigate_back()
         elif action_type == "finished":
-            print(f"Task completed: {params['content']}")
+            self.logger.info(
+                "\n[bold green]{} Task Completed[/]\n[italic dim]{}[/]\n".format(
+                    TROPHY, params["content"]
+                ),
+                extra={"markup": True},
+            )
         else:
-            raise ValueError(f"Unknown action type: {action_type}")
+            self.logger.error(
+                f"[bold red]{TIMES} Unknown action type: {action}[/]",
+                extra={"markup": True},
+            )
+            raise ValueError(f"Unknown action type: {action}")
 
     def _compress_history(self):
         if not self.history:
@@ -206,7 +264,10 @@ class DoubaoAgent(Agent):
         history = []
         cnt = 0
         screens_num = len(self.history) // 2
-        screen_start_idx = max(10000000000, screens_num - 5)
+        screen_start_idx = max(0, screens_num - 5)
+
+        self.logger.debug(f"Compressing history: {len(self.history)} items")
+
         for h in self.history:
             if h["role"] == "user":
                 hc = []
@@ -220,6 +281,8 @@ class DoubaoAgent(Agent):
                 history.append({"role": "user", "content": hc})
             else:
                 history.append(h)
+
+        self.logger.debug(f"Compressed to {len(history)} items")
         return history
 
     def predict(self) -> Action:
@@ -227,9 +290,17 @@ class DoubaoAgent(Agent):
             prompt = DOUBAO_PROMPT.format(
                 language=self.language.value, instruction=self.task_name
             )
+            self.logger.info(
+                f"[bold magenta]{ROCKET} Task Started[/]\n"
+                f"[italic dim]{self.task_name}[/]\n",
+                extra={"markup": True},
+            )
         else:
             prompt = "Please continue"
+
+        self.logger.debug("Capturing screenshot...")
         screenshot = self.device.capture_screenshot("B64")
+        self.logger.debug(f"Screenshot captured: {len(screenshot)} chars (base64)")
 
         messages = [
             {
@@ -243,11 +314,29 @@ class DoubaoAgent(Agent):
                 ],
             }
         ]
-        response = self.client.query(
-            self.model_name, self._compress_history() + messages
+
+        self.logger.info(
+            f"[bold blue]{MAGIC} Requesting LLM prediction[/] ({self.model_name})",
+            extra={"markup": True},
         )
+
+        start_time = time.time()
+        response = self.client.query(
+            self.model_name,
+            self._compress_history() + messages,
+            logger=self.logger,
+        )
+        elapsed = time.time() - start_time
+
+        self.logger.info(
+            f"[dim]{CHECK} Response received in {elapsed:.2f}s[/]",
+            extra={"markup": True},
+        )
+        self.logger.debug(f"Response length: {len(response.response)} chars")
+
         action = self._parse_action(response.response)
         self._execute(action)
         self.history.extend(messages)
         self.history.append({"role": "assistant", "content": response.response})
+
         return action
