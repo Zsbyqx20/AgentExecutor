@@ -57,7 +57,7 @@ press_back()
 wait(seconds=1) # Wait for 1 second before next action (useful for loading screens)
 """
 
-_NOTE_ACTIONS = """note_create(content='xxx') # Create a new note with the specified content
+_NOTE_ACTIONS = """note_create(content='xxx') # Create a new note on notepad with the specified content
 note_edit(index=1, content='xxx') # Edit the note at position 1 (1-based index)
 note_remove(index=1) # Remove the note at position 1 (1-based index)
 """
@@ -71,11 +71,13 @@ _FINISHED_ACTION = """finished(content='xxx') # Use escape characters \\', \\", 
 
 _NOTEPAD_SECTION = """
 ## Notepad
+### Hint: You can record important information here. It should be useful when you need to work on long-term tasks. Use related actions to manage notes yourself.
 {notepad_section}
 """
 
 _USER_INSTRUCTION = """
 ## User Instruction
+Current App: {current_app}
 {instruction}
 """
 
@@ -141,8 +143,12 @@ class DoubaoAgent(Agent):
             notepad_section = self._format_notepad()
             prompt += _NOTEPAD_SECTION.format(notepad_section=notepad_section)
 
-        # Add user instruction
-        prompt += _USER_INSTRUCTION.format(instruction=self.task_name)
+        # Get current app and add user instruction
+        current_app = self.device.get_current_app()
+        prompt += _USER_INSTRUCTION.format(
+            current_app=current_app,
+            instruction=self.task_name,
+        )
 
         # Format language placeholder
         return prompt.format(language=self.language.value)

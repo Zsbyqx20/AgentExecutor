@@ -68,18 +68,18 @@ class Device:
             extra={"markup": True},
         )
 
-    def _parse_app_mapping(self, raw_output: str) -> tuple[dict, dict, list]:
+    def _parse_app_mapping(self, raw_output: str) -> tuple[dict, dict, dict]:
         """Parse content provider output into app mappings.
 
         Args:
             raw_output: Raw output from content query command
 
         Returns:
-            Tuple of (name_to_package, name_to_package_lower, all_apps)
+            Tuple of (name_to_package, name_to_package_lower, package_to_name)
         """
         name_to_package = {}
         name_to_package_lower = {}
-        all_apps = []
+        package_to_name = {}
 
         # Split into rows
         rows = raw_output.split("Row:")
@@ -98,10 +98,10 @@ class Device:
 
                 name_to_package[display_name] = package_name
                 name_to_package_lower[display_name.lower()] = package_name
-                all_apps.append({"name": display_name, "package": package_name})
+                package_to_name[package_name] = display_name
 
-        self.logger.debug(f"Parsed {len(all_apps)} apps from content provider")
-        return name_to_package, name_to_package_lower, all_apps
+        self.logger.debug(f"Parsed {len(package_to_name)} apps from content provider")
+        return name_to_package, name_to_package_lower, package_to_name
 
     def _set_ime(self):
         target_ime = "com.android.adbkeyboard/.AdbIME"
@@ -145,12 +145,12 @@ class Device:
     def press(self, x: int, y: int) -> None:
         self.logger.debug(f"press({x}, {y})")
         self._device.click(x, y)
-        time.sleep(0.5)
+        time.sleep(1)
 
     def long_press(self, x: int, y: int, duration: float):
         self.logger.debug(f"long_press({x}, {y}, {duration}s)")
         self._device.swipe(x, y, x, y, duration)
-        time.sleep(0.5)
+        time.sleep(1)
 
     def type_text(self, text: str):
         display_text = text[:50] + "..." if len(text) > 50 else text
@@ -165,20 +165,20 @@ class Device:
             "msg",
             b64_text,
         ])
-        time.sleep(0.5)
+        time.sleep(1)
 
     def drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration: float):
         self.logger.debug(
             f"drag({start_x}, {start_y}) → ({end_x}, {end_y}), {duration}s"
         )
         self._device.drag(start_x, start_y, end_x, end_y, duration)
-        time.sleep(0.5)
+        time.sleep(1)
 
-    def list_apps(self) -> list[dict]:
-        """Return list of all available launchable apps.
+    def list_apps(self) -> dict[str, str]:
+        """Return mapping of all available launchable apps.
 
         Returns:
-            List of dicts with 'name' and 'package' keys
+            Dict mapping package names to display names
         """
         return self._all_apps
 
@@ -194,9 +194,8 @@ class Device:
         # Check if it looks like a package name (contains dots)
         if "." in app_identifier:
             # Validate it's a known package
-            for app in self._all_apps:
-                if app["package"] == app_identifier:
-                    return app_identifier
+            if app_identifier in self._all_apps:
+                return app_identifier
             return None
 
         # Try exact display name match
@@ -207,12 +206,12 @@ class Device:
         lower_key = app_identifier.lower()
         if lower_key in self._app_mapping_lower:
             # Find the actual display name for logging
-            for app in self._all_apps:
-                if app["name"].lower() == lower_key:
-                    self.logger.debug(
-                        f"Using case-insensitive match: '{app_identifier}' → '{app['name']}'"
-                    )
-                    return self._app_mapping_lower[lower_key]
+            display_name = self._all_apps.get(self._app_mapping_lower[lower_key])
+            if display_name:
+                self.logger.debug(
+                    f"Using case-insensitive match: '{app_identifier}' → '{display_name}'"
+                )
+            return self._app_mapping_lower[lower_key]
 
         return None
 
@@ -226,7 +225,7 @@ class Device:
         Returns:
             List of similar app names
         """
-        all_names = [app["name"] for app in self._all_apps]
+        all_names = list(self._all_apps.values())
         similar = get_close_matches(app_name, all_names, n=max_results, cutoff=0.6)
         return similar
 
@@ -282,7 +281,16 @@ class Device:
         ])
 
         self.logger.debug(f"Launched {package_name}")
-        time.sleep(0.5)
+        time.sleep(1)
+
+    def get_current_app(self) -> str:
+        """Get the current app package name (or display name if available).
+
+        Returns:
+            Package/Display name of the current app
+        """
+        package = self._device.app_current().package
+        return self._all_apps.get(package, package)
 
     def scroll(
         self,
@@ -306,12 +314,12 @@ class Device:
     def navigate_home(self):
         self.logger.debug("navigate_home()")
         self._device.keyevent("HOME")
-        time.sleep(0.5)
+        time.sleep(1)
 
     def navigate_back(self):
         self.logger.debug("navigate_back()")
         self._device.keyevent("BACK")
-        time.sleep(0.5)
+        time.sleep(1)
 
     def start_recording(self, video_path: str):
         self.logger.info(

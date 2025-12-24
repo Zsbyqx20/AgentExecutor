@@ -29,6 +29,12 @@ pyright
 
 The codebase follows a three-layer architecture:
 
+### Supporting Modules (`age/`)
+
+- **`logging_config.py`** - Centralized logging configuration with dual-output setup
+- **`logger.py`** - Logger factory for consistent logger instances
+- **`icons.py`** - Nerd Font icons for terminal output
+
 ### Core Modules (`age/`)
 
 1. **`device.py`** - Device Interface Layer
@@ -47,7 +53,8 @@ The codebase follows a three-layer architecture:
    - `Agent` (abstract base class) - extensible for different LLM providers
    - `DoubaoAgent` - concrete implementation for Doubao/Ark models
    - Orchestrates the predict-execute loop: screenshot → LLM → parse action → execute
-   - Implements retry logic for API failures and comprehensive error debugging
+   - Implements notepad functionality for persistent note-taking during task execution
+   - Includes wait action for pausing during loading screens
 
 ### Execution Flow
 
@@ -65,13 +72,15 @@ The LLM uses normalized coordinates (0-1000 scale) which are converted to actual
 
 ### Action Space
 
-Defined in `DOUBAO_PROMPT`:
+Defined in the prompt components (`_BASE_ACTIONS`, `_NOTE_ACTIONS`, `_FINISHED_ACTION`):
 - `click(point)`, `long_press(point)`
 - `type(content)` - use `\n` for submit
 - `scroll(point, direction)`
 - `drag(start_point, end_point)`
 - `press_home()`, `press_back()`
 - `open_app(app_name)` - with fuzzy matching support
+- `wait(seconds)` - for pausing during loading screens
+- `note_create/edit/remove(content)` - for persistent note-taking (optional feature)
 - `finished(content)` - terminates the task loop
 
 ### Logging System
@@ -79,7 +88,9 @@ Defined in `DOUBAO_PROMPT`:
 The project uses a professional dual-output logging system with Rich:
 - **Console**: Clean INFO+ level output with colored Nerd Font icons
 - **Files**: Detailed DEBUG+ logs with full context in `logs/` directory
-- Rotating file handlers with size limits (10MB per file, 5 backups)
+  - `agent_debug.log` - All debug logs (10MB per file, 5 backups)
+  - `agent_errors.log` - Error-only logs (10MB per file, 10 backups)
+- Configurable via `setup_logging()` in `logging_config.py`
 
 ### History Management
 
@@ -102,6 +113,8 @@ API_KEY=your_api_key_here
 ## Dependencies
 
 - `adbutils` - ADB communication
+- `aiohttp` - Async HTTP client
+- `httpx[socks]` - HTTP client with SOCKS support
 - `PIL` - Image processing
 - `requests` - HTTP client for LLM API
 - `python-dotenv` - Environment configuration
