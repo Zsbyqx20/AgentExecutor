@@ -36,7 +36,7 @@ class Agent(ABC):
 
 
 # Base prompt components
-_BASE_PROMPT_PREFIX = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
+_BASE_PROMPT_PREFIX = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task. 
 ## Output Format
 ```
 Thought: ...
@@ -54,6 +54,7 @@ scroll(point='<point>x1 y1</point>', direction='down or up or right or left')
 drag(start_point='<point>x1 y1</point>', end_point='<point>x2 y2</point>')
 press_home()
 press_back()
+wait(seconds=1) # Wait for 1 second before next action (useful for loading screens)
 """
 
 _NOTE_ACTIONS = """note_create(content='xxx') # Create a new note with the specified content
@@ -233,6 +234,11 @@ class DoubaoAgent(Agent):
                 action_type = "press_home"
             elif action_text == "press_back()":
                 action_type = "press_back"
+            elif action_text.startswith("wait("):
+                action_type = "wait"
+                seconds_match = re.search(r"seconds=(\d+)", action_text)
+                if seconds_match:
+                    params["seconds"] = int(seconds_match.group(1))
             elif action_text.startswith("finished("):
                 action_type = "finished"
                 content_match = re.search(r"content='([^']*)'", action_text)
@@ -277,6 +283,7 @@ class DoubaoAgent(Agent):
             "open_app": "cyan",
             "press_home": "magenta",
             "press_back": "magenta",
+            "wait": "dim",
             "finished": "bold green",
             "note_create": "bold cyan",
             "note_edit": "bold yellow",
@@ -321,6 +328,11 @@ class DoubaoAgent(Agent):
             self.device.navigate_home()
         elif action_type == "press_back":
             self.device.navigate_back()
+        elif action_type == "wait":
+            seconds = params["seconds"]
+            self.logger.debug(f"Waiting for {seconds} second(s)...")
+            time.sleep(seconds)
+            self.logger.debug("Wait complete")
         elif action_type == "finished":
             self.logger.info(
                 "\n[bold green]{} Task Completed[/]\n[italic dim]{}[/]\n".format(
