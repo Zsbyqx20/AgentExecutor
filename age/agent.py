@@ -35,7 +35,8 @@ class Agent(ABC):
         pass
 
 
-DOUBAO_PROMPT = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
+# Base prompt components
+_BASE_PROMPT_PREFIX = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 ## Output Format
 ```
 Thought: ...
@@ -43,7 +44,9 @@ Action: ...
 ```
 
 ## Action Space
-open_app(app='xxx')
+"""
+
+_BASE_ACTIONS = """open_app(app='xxx')
 click(point='<point>x1 y1</point>')
 long_press(point='<point>x1 y1</point>')
 type(content='') #If you want to submit your input, use "\\n" at the end of `content`.
@@ -51,18 +54,26 @@ scroll(point='<point>x1 y1</point>', direction='down or up or right or left')
 drag(start_point='<point>x1 y1</point>', end_point='<point>x2 y2</point>')
 press_home()
 press_back()
-note_create(content='xxx') # Create a new note with the specified content
+"""
+
+_NOTE_ACTIONS = """note_create(content='xxx') # Create a new note with the specified content
 note_edit(index=1, content='xxx') # Edit the note at position 1 (1-based index)
 note_remove(index=1) # Remove the note at position 1 (1-based index)
-finished(content='xxx') # Use escape characters \\', \\", and \\n in content part to ensure we can parse the content in normal python string format.
+"""
+
+_FINISHED_ACTION = """finished(content='xxx') # Use escape characters \\', \\", and \\n in content part to ensure we can parse the content in normal python string format.
 
 ## Note
 - Use {language} in `Thought` part.
 - Write a small plan and finally summarize your next action (with its target element) in one sentence in `Thought` part.
+"""
 
+_NOTEPAD_SECTION = """
 ## Notepad
 {notepad_section}
+"""
 
+_USER_INSTRUCTION = """
 ## User Instruction
 {instruction}
 """
@@ -81,7 +92,6 @@ class DoubaoAgent(Agent):
         self.name = "Doubao"
         self.model_name = model_name
         self.task_name = task_name
-        self.prompt_template = DOUBAO_PROMPT
         self.window_size = self.device.size
         self.language = Language[language.upper()]
         self.client = APIClient()
@@ -113,6 +123,28 @@ class DoubaoAgent(Agent):
         for i, note in enumerate(self.notes, start=1):
             formatted_notes.append(f"{i}. {note}")
         return "\n".join(formatted_notes)
+
+    def _build_prompt(self) -> str:
+        """Build the prompt dynamically based on notepad configuration."""
+        # Build action space
+        action_space = _BASE_ACTIONS
+        if self.enable_notepad:
+            action_space += _NOTE_ACTIONS
+        action_space += _FINISHED_ACTION
+
+        # Build the prompt
+        prompt = _BASE_PROMPT_PREFIX + action_space
+
+        # Add notepad section if enabled
+        if self.enable_notepad:
+            notepad_section = self._format_notepad()
+            prompt += _NOTEPAD_SECTION.format(notepad_section=notepad_section)
+
+        # Add user instruction
+        prompt += _USER_INSTRUCTION.format(instruction=self.task_name)
+
+        # Format language placeholder
+        return prompt.format(language=self.language.value)
 
     def _parse_action(self, response_text: str) -> Action:
         thought_match = re.search(
@@ -382,12 +414,7 @@ class DoubaoAgent(Agent):
 
     def predict(self) -> Action:
         if not self.history:
-            notepad_section = self._format_notepad()
-            prompt = self.prompt_template.format(
-                language=self.language.value,
-                notepad_section=notepad_section,
-                instruction=self.task_name,
-            )
+            prompt = self._build_prompt()
             self.logger.info(
                 f"[bold magenta]{ROCKET} Task Started[/]\n"
                 f"[italic dim]{self.task_name}[/]\n",
