@@ -100,11 +100,12 @@ The `_compress_history()` method implements a sliding window for screenshots, ke
 
 ### Action Tracking System
 
-The `ActionTracker` class provides automatic action execution tracing with annotated screenshots.
+The `ActionTracker` class provides automatic action execution tracing with annotated screenshots and video recording.
 
 **Features:**
 - Records each action with timestamp, parameters, and LLM thought
 - Annotates screenshots with visual markers showing where actions occurred
+- Records video of entire task execution
 - Generates markdown execution trace documents
 
 **Usage:**
@@ -114,7 +115,7 @@ from age.agent import DoubaoAgent
 agent = DoubaoAgent(
     model_name="doubao-seed-1-6-vision-250815",
     task_name="在设置中开启深色模式",
-    enable_tracking=True,  # Enable action tracking
+    enable_tracking=True,  # Enable action tracking (includes video)
     tracking_output_dir="./tracks",  # Optional: custom output directory
 )
 
@@ -124,19 +125,27 @@ while True:
     if action["action_type"] == "finished":
         break
 
-# Trace automatically saved to tracks/task_YYYYMMDD_HHMMSS_<name>/trace.md
+# Trace and video automatically saved to tracks/task_YYYYMMDD_HHMMSS_<name>/
 ```
 
 **Output Structure:**
 ```
 tracks/
 └── task_20241224_201530_open_settings/
-    ├── trace.md              # Markdown execution trace
+    ├── trace.md              # Markdown execution trace with video section
+    ├── recording.mp4         # Video of entire task execution
     └── screenshots/
         ├── step_001_open_app.png
         ├── step_002_click.png
         └── ...
 ```
+
+**Video Recording:**
+- Starts automatically when tracking is enabled
+- Records entire task execution from start to finish
+- Saved as MP4 format in task directory
+- Referenced in markdown trace with embedded HTML5 video player
+- Gracefully handles recording failures without disrupting task execution
 
 **Action Visualizations:**
 - Click/Long Press: Green circle with center dot

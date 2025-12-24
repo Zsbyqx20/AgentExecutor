@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import Image as PILImage
 
 from .agent import Action
-from .icons import FILE, FOLDER, TIMES
+from .icons import FILE, FOLDER, TIMES, VIDEO
 
 
 class MarkerColor(str, Enum):
@@ -78,6 +78,12 @@ class ActionTracker:
 
         # Store recorded actions
         self.actions: list[dict] = []
+
+        # Video recording state
+        self.video_enabled: bool = False
+        self.device_video_path: str = "/sdcard/agent_recording.mp4"
+        self.local_video_path: Path | None = None
+        self.video_start_timestamp: datetime | None = None
 
         self.logger.info(
             f"[cyan]{FOLDER} Tracking directory:[/] {self.task_dir}",
@@ -158,6 +164,96 @@ class ActionTracker:
             )
             # Return path even if generation failed
             return self.task_dir / "trace.md"
+
+    def start_video_recording(self, device) -> bool:
+        """Start video recording on the device.
+
+        Args:
+            device: Device instance to control recording
+
+        Returns:
+            True if recording started successfully, False otherwise
+        """
+        try:
+            device.start_recording(self.device_video_path)
+            self.video_enabled = True
+            self.video_start_timestamp = datetime.now()
+            self.logger.info(
+                f"[cyan]{VIDEO} Video recording started[/]",
+                extra={"markup": True},
+            )
+            return True
+        except Exception as e:
+            self.logger.error(
+                f"[bold red]{TIMES} Failed to start video recording:[/] {e}",
+                extra={"markup": True},
+            )
+            return False
+
+    def stop_video_recording(self, device) -> bool:
+        """Stop video recording and pull file to local storage.
+
+        Args:
+            device: Device instance to control recording
+
+        Returns:
+            True if video was pulled successfully, False otherwise
+        """
+        if not self.video_enabled:
+            return False
+
+        try:
+            device.end_recording()
+            self.logger.info(
+                f"{VIDEO} Video recording stopped",
+                extra={"markup": True},
+            )
+
+            self.local_video_path = self.task_dir / "recording.mp4"
+            success = device.pull_recording(
+                self.device_video_path, self.local_video_path
+            )
+
+            if success:
+                self.logger.info(
+                    f"[cyan]{VIDEO} Video saved to:[/] {self.local_video_path}",
+                    extra={"markup": True},
+                )
+
+            self.video_enabled = False
+            return success
+
+        except Exception as e:
+            self.logger.error(
+                f"[bold red]{TIMES} Failed to stop video recording:[/] {e}",
+                extra={"markup": True},
+            )
+            self.video_enabled = False
+            return False
+
+    def _generate_video_section(self) -> str:
+        """Generate markdown section for video recording.
+
+        Returns:
+            Markdown string with video reference or empty string if no video
+        """
+        if not self.local_video_path or not self.local_video_path.exists():
+            return ""
+
+        lines = ["## Video Recording\n"]
+
+        if self.video_start_timestamp:
+            lines.append(f"**Started**: {self.video_start_timestamp.isoformat()}\n")
+
+        lines.append("### Execution Video\n")
+        lines.append("[Download video](recording.mp4)\n")
+        lines.append('<video controls width="100%">\n')
+        lines.append('  <source src="recording.mp4" type="video/mp4">\n')
+        lines.append("  Your browser does not support the video tag.\n")
+        lines.append("</video>\n")
+        lines.append("---\n")
+
+        return "\n".join(lines)
 
     def _generate_hash(self, name: str) -> str:
         """Generate 8-digit hash from task name.
@@ -515,6 +611,11 @@ class ActionTracker:
             "---",
             "",
         ]
+
+        # Add video section
+        video_section = self._generate_video_section()
+        if video_section:
+            lines.append(video_section)
 
         for action_data in self.actions:
             step = action_data["step"]

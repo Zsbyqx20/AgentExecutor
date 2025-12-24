@@ -118,6 +118,9 @@ class DoubaoAgent(Agent):
                 logger=self.logger,
             )
 
+            # Start video recording
+            self.tracker.start_video_recording(self.device)
+
     def reset(self, **kwargs) -> None:
         self.task_name = kwargs.get("task_name", "")
         self.history = []
@@ -509,6 +512,8 @@ class DoubaoAgent(Agent):
 
             # Finalize tracking on finished action
             if action["action_type"] == "finished":
+                # Stop video recording before finalizing
+                self.tracker.stop_video_recording(self.device)
                 self.tracker.finalize()
 
         self.history.extend(messages)
