@@ -185,6 +185,8 @@ class DoubaoAgent(Agent):
                 content_match = re.search(r"content='([^']*)'", action_text)
                 if content_match:
                     params["content"] = content_match.group(1)
+        else:
+            raise ValueError(f"Cannot parse the action: {response_text}")
 
         return Action(action_type=action_type, params=params, thought=thought)
 
@@ -326,6 +328,7 @@ class DoubaoAgent(Agent):
             self.model_name,
             self._compress_history() + messages,
             logger=self.logger,
+            thinking={"type": "disabled"},
         )
         elapsed = time.time() - start_time
 

@@ -51,7 +51,9 @@ class APIClient:
                         "reasoning_content", ""
                     )
                 )
-                logger.debug("Successfully parsed API response")
+                logger.debug(
+                    f"Successfully parsed API response. RESP: {resp} THINK: {think}"
+                )
             except Exception as e:
                 error = str(e)
                 logger.error(
