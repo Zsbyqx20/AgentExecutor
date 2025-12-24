@@ -34,6 +34,7 @@ The codebase follows a three-layer architecture:
 - **`logging_config.py`** - Centralized logging configuration with dual-output setup
 - **`logger.py`** - Logger factory for consistent logger instances
 - **`icons.py`** - Nerd Font icons for terminal output
+- **`tracker.py`** - Action tracking system for generating execution traces with annotated screenshots
 
 ### Core Modules (`age/`)
 
@@ -55,6 +56,7 @@ The codebase follows a three-layer architecture:
    - Orchestrates the predict-execute loop: screenshot → LLM → parse action → execute
    - Implements notepad functionality for persistent note-taking during task execution
    - Includes wait action for pausing during loading screens
+   - Optional action tracking for generating execution traces with annotated screenshots
 
 ### Execution Flow
 
@@ -95,6 +97,55 @@ The project uses a professional dual-output logging system with Rich:
 ### History Management
 
 The `_compress_history()` method implements a sliding window for screenshots, keeping only the last 5 screenshots to manage token usage while maintaining conversation context.
+
+### Action Tracking System
+
+The `ActionTracker` class provides automatic action execution tracing with annotated screenshots.
+
+**Features:**
+- Records each action with timestamp, parameters, and LLM thought
+- Annotates screenshots with visual markers showing where actions occurred
+- Generates markdown execution trace documents
+
+**Usage:**
+```python
+from age.agent import DoubaoAgent
+
+agent = DoubaoAgent(
+    model_name="doubao-seed-1-6-vision-250815",
+    task_name="在设置中开启深色模式",
+    enable_tracking=True,  # Enable action tracking
+    tracking_output_dir="./tracks",  # Optional: custom output directory
+)
+
+# Run the task loop
+while True:
+    action = agent.predict()
+    if action["action_type"] == "finished":
+        break
+
+# Trace automatically saved to tracks/task_YYYYMMDD_HHMMSS_<name>/trace.md
+```
+
+**Output Structure:**
+```
+tracks/
+└── task_20241224_201530_open_settings/
+    ├── trace.md              # Markdown execution trace
+    └── screenshots/
+        ├── step_001_open_app.png
+        ├── step_002_click.png
+        └── ...
+```
+
+**Action Visualizations:**
+- Click/Long Press: Green circle with center dot
+- Scroll: Yellow circle with directional arrow
+- Drag: Green start point, red end point, purple connecting line
+- Type: Blue keyboard area with text preview
+- System Actions (Home/Back/Open App): Centered text overlay
+- Wait: Clock icon with seconds label
+- Notepad: Note icon with content preview
 
 ## Environment Setup
 

@@ -1,7 +1,9 @@
 import re
 import time
 from abc import ABC, abstractmethod
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Literal, TypedDict
 
 from .api import APIClient
@@ -90,6 +92,8 @@ class DoubaoAgent(Agent):
         language: Literal["CN", "EN"] = "CN",
         device_id: str | None = None,
         enable_notepad: bool = False,
+        enable_tracking: bool = False,
+        tracking_output_dir: str | Path | None = None,
     ) -> None:
         super().__init__(device_id)
         self.name = "Doubao"
@@ -102,6 +106,17 @@ class DoubaoAgent(Agent):
         self.logger = get_logger(__name__)
         self.enable_notepad = enable_notepad
         self.notes: list[str] = []
+        self.tracker = None
+        if enable_tracking:
+            from .tracker import ActionTracker
+
+            self.tracker = ActionTracker(
+                task_name=self.task_name,
+                model_name=self.model_name,
+                language=self.language.value,
+                output_dir=tracking_output_dir or Path("tracks"),
+                logger=self.logger,
+            )
 
     def reset(self, **kwargs) -> None:
         self.task_name = kwargs.get("task_name", "")
@@ -445,6 +460,9 @@ class DoubaoAgent(Agent):
         screenshot = self.device.capture_screenshot("B64")
         self.logger.debug(f"Screenshot captured: {len(screenshot)} chars (base64)")
 
+        # Store screenshot for tracking (reused from LLM capture)
+        screenshot_for_tracker = screenshot
+
         messages = [
             {
                 "role": "user",
@@ -480,6 +498,19 @@ class DoubaoAgent(Agent):
 
         action = self._parse_action(response.response)
         self._execute(action)
+
+        # Record action for tracking
+        if self.tracker:
+            self.tracker.record_action(
+                action=action,
+                screenshot_b64=screenshot_for_tracker,
+                timestamp=datetime.now(),
+            )
+
+            # Finalize tracking on finished action
+            if action["action_type"] == "finished":
+                self.tracker.finalize()
+
         self.history.extend(messages)
         self.history.append({"role": "assistant", "content": response.response})
 

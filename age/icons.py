@@ -18,3 +18,5 @@ KEYBOARD = "\uf11c"  # Keyboard/IME
 VIDEO = "\uf12d"  # Screen recording
 REFRESH = "\uf021"  # Retry
 ROTATE_LEFT = "\uf2ea"  # Reset
+FILE = "\uf15b"  # File/trace/document
+FOLDER = "\uf07b"  # Folder/directory
