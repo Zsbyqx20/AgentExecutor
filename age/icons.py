@@ -12,6 +12,7 @@ TROPHY = "\uf091"  # Task completed
 MAGIC = "\uf0d0"  # LLM prediction
 CHECK = "\uf058"  # Success
 TIMES = "\uf00d"  # Error
+WARNING = "\uf071"  # Warning
 PHONE = "\uf10b"  # Device
 KEYBOARD = "\uf11c"  # Keyboard/IME
 VIDEO = "\uf12d"  # Screen recording

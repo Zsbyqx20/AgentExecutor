@@ -1,5 +1,7 @@
 import base64
+import re
 import time
+from difflib import get_close_matches
 from enum import Enum
 from io import BytesIO
 from typing import Literal, overload
@@ -7,7 +9,7 @@ from typing import Literal, overload
 from adbutils import adb
 from PIL.Image import Image
 
-from .icons import KEYBOARD, PHONE, TIMES, VIDEO
+from .icons import KEYBOARD, PHONE, TIMES, VIDEO, WARNING
 from .logger import get_logger
 
 
@@ -51,6 +53,55 @@ class Device:
 
         self._set_ime()
         self._is_recording = False
+
+        self.app_name_mapping = self._device.shell([
+            "content",
+            "query",
+            "--uri",
+            "content://com.mobilellm.appscan.provider/apps?launchable_only=1",
+        ])
+        self._app_mapping, self._app_mapping_lower, self._all_apps = (
+            self._parse_app_mapping(self.app_name_mapping)
+        )
+        self.logger.info(
+            f"[cyan]{PHONE} Loaded {len(self._all_apps)} launchable apps[/]",
+            extra={"markup": True},
+        )
+
+    def _parse_app_mapping(self, raw_output: str) -> tuple[dict, dict, list]:
+        """Parse content provider output into app mappings.
+
+        Args:
+            raw_output: Raw output from content query command
+
+        Returns:
+            Tuple of (name_to_package, name_to_package_lower, all_apps)
+        """
+        name_to_package = {}
+        name_to_package_lower = {}
+        all_apps = []
+
+        # Split into rows
+        rows = raw_output.split("Row:")
+
+        for row in rows:
+            if not row.strip():
+                continue
+
+            # Extract display_name and package_name
+            display_match = re.search(r"display_name=([^\s]+),", row)
+            package_match = re.search(r"package_name=([^\s]+),", row)
+
+            if display_match and package_match:
+                display_name = display_match.group(1)
+                package_name = package_match.group(1)
+
+                name_to_package[display_name] = package_name
+                name_to_package_lower[display_name.lower()] = package_name
+                all_apps.append({"name": display_name, "package": package_name})
+
+        self.logger.debug(f"Parsed {len(all_apps)} apps from content provider")
+        return name_to_package, name_to_package_lower, all_apps
 
     def _set_ime(self):
         target_ime = "com.android.adbkeyboard/.AdbIME"
@@ -123,8 +174,104 @@ class Device:
         self._device.drag(start_x, start_y, end_x, end_y, duration)
         time.sleep(0.5)
 
-    def open_app(self, package_name: str):
-        self.logger.debug(f'open_app("{package_name}")')
+    def list_apps(self) -> list[dict]:
+        """Return list of all available launchable apps.
+
+        Returns:
+            List of dicts with 'name' and 'package' keys
+        """
+        return self._all_apps
+
+    def _find_app_package(self, app_identifier: str) -> str | None:
+        """Find package name for app identifier.
+
+        Args:
+            app_identifier: Display name or package name
+
+        Returns:
+            Package name if found, None otherwise
+        """
+        # Check if it looks like a package name (contains dots)
+        if "." in app_identifier:
+            # Validate it's a known package
+            for app in self._all_apps:
+                if app["package"] == app_identifier:
+                    return app_identifier
+            return None
+
+        # Try exact display name match
+        if app_identifier in self._app_mapping:
+            return self._app_mapping[app_identifier]
+
+        # Try case-insensitive match
+        lower_key = app_identifier.lower()
+        if lower_key in self._app_mapping_lower:
+            # Find the actual display name for logging
+            for app in self._all_apps:
+                if app["name"].lower() == lower_key:
+                    self.logger.debug(
+                        f"Using case-insensitive match: '{app_identifier}' → '{app['name']}'"
+                    )
+                    return self._app_mapping_lower[lower_key]
+
+        return None
+
+    def _find_similar_apps(self, app_name: str, max_results: int = 3) -> list[str]:
+        """Find apps with similar names for error suggestions.
+
+        Args:
+            app_name: The app name to find similar matches for
+            max_results: Maximum number of results to return
+
+        Returns:
+            List of similar app names
+        """
+        all_names = [app["name"] for app in self._all_apps]
+        similar = get_close_matches(app_name, all_names, n=max_results, cutoff=0.6)
+        return similar
+
+    def open_app(self, app_identifier: str):
+        """Open an app by display name or package name.
+
+        Args:
+            app_identifier: App display name (e.g., "Chrome") or package name
+                           (e.g., "com.android.chrome")
+
+        Raises:
+            ValueError: If app not found
+        """
+        self.logger.debug(f'open_app("{app_identifier}")')
+
+        # Find package name
+        package_name = self._find_app_package(app_identifier)
+
+        if package_name is None:
+            # App not found - try fuzzy matching
+            similar = self._find_similar_apps(app_identifier)
+
+            # If only one fuzzy match, use it automatically
+            if len(similar) == 1:
+                matched_app = similar[0]
+                package_name = self._app_mapping[matched_app]
+                self.logger.warning(
+                    f'[yellow]{WARNING} App "{app_identifier}" not found, using closest match: "{matched_app}"[/]',
+                    extra={"markup": True},
+                )
+            else:
+                # Multiple matches or no matches - show error
+                error_msg = f'[bold red]{TIMES} App "{app_identifier}" not found[/]\n'
+
+                if similar:
+                    error_msg += "[dim]Did you mean one of these?[/]\n"
+                    for app in similar:
+                        error_msg += f"  • {app}\n"
+
+                error_msg += f"[dim]Available apps: use device.list_apps() to see all {len(self._all_apps)} apps[/]"
+
+                self.logger.error(error_msg, extra={"markup": True})
+                raise ValueError(f'App "{app_identifier}" not found')
+
+        # Launch the app
         self._device.shell([
             "monkey",
             "-p",
@@ -133,6 +280,8 @@ class Device:
             "android.intent.category.LAUNCHER",
             "1",
         ])
+
+        self.logger.debug(f"Launched {package_name}")
         time.sleep(0.5)
 
     def scroll(

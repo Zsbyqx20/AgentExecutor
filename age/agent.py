@@ -43,6 +43,7 @@ Action: ...
 ```
 
 ## Action Space
+open_app(app='xxx')
 click(point='<point>x1 y1</point>')
 long_press(point='<point>x1 y1</point>')
 type(content='') #If you want to submit your input, use "\\n" at the end of `content`.
@@ -154,9 +155,9 @@ class DoubaoAgent(Agent):
                     params["direction"] = direction_match.group(1)
             elif action_text.startswith("open_app("):
                 action_type = "open_app"
-                app_match = re.search(r"app_name='([^']*)'", action_text)
+                app_match = re.search(r"app='([^']*)'", action_text)
                 if app_match:
-                    params["app_name"] = app_match.group(1)
+                    params["app"] = app_match.group(1)
             elif action_text.startswith("drag("):
                 action_type = "drag"
                 start_match = re.search(
@@ -233,8 +234,8 @@ class DoubaoAgent(Agent):
             self.logger.debug(f"Scroll direction: {direction}, distance: {distance}")
             self.device.scroll(x, y, Direction[direction.upper()], distance)
         elif action_type == "open_app":
-            self.logger.debug(f"Opening app: {params['app_name']}")
-            self.device.open_app(params["app_name"])
+            self.logger.debug(f"Opening app: {params['app']}")
+            self.device.open_app(params["app"])
         elif action_type == "drag":
             start_x, start_y = self._normalize_coordinates(*params["start_point"])
             end_x, end_y = self._normalize_coordinates(*params["end_point"])
