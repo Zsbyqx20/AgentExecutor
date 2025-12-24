@@ -35,7 +35,7 @@ class Agent(ABC):
         pass
 
 
-DOUBAO_PROMPT = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task. 
+DOUBAO_PROMPT = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
 ## Output Format
 ```
 Thought: ...
@@ -51,11 +51,17 @@ scroll(point='<point>x1 y1</point>', direction='down or up or right or left')
 drag(start_point='<point>x1 y1</point>', end_point='<point>x2 y2</point>')
 press_home()
 press_back()
+note_create(content='xxx') # Create a new note with the specified content
+note_edit(index=1, content='xxx') # Edit the note at position 1 (1-based index)
+note_remove(index=1) # Remove the note at position 1 (1-based index)
 finished(content='xxx') # Use escape characters \\', \\", and \\n in content part to ensure we can parse the content in normal python string format.
 
 ## Note
 - Use {language} in `Thought` part.
 - Write a small plan and finally summarize your next action (with its target element) in one sentence in `Thought` part.
+
+## Notepad
+{notepad_section}
 
 ## User Instruction
 {instruction}
@@ -69,6 +75,7 @@ class DoubaoAgent(Agent):
         task_name: str,
         language: Literal["CN", "EN"] = "CN",
         device_id: str | None = None,
+        enable_notepad: bool = False,
     ) -> None:
         super().__init__(device_id)
         self.name = "Doubao"
@@ -80,10 +87,13 @@ class DoubaoAgent(Agent):
         self.client = APIClient()
         self.history = []
         self.logger = get_logger(__name__)
+        self.enable_notepad = enable_notepad
+        self.notes: list[str] = []
 
     def reset(self, **kwargs) -> None:
         self.task_name = kwargs.get("task_name", "")
         self.history = []
+        self.notes = []
         self.logger.info(
             f"[bold magenta]{ROTATE_LEFT} Agent reset[/]",
             extra={"markup": True},
@@ -92,6 +102,17 @@ class DoubaoAgent(Agent):
     def _normalize_coordinates(self, x: int, y: int) -> tuple[int, int]:
         width, height = self.window_size
         return int(x * width / 1000), int(y * height / 1000)
+
+    def _format_notepad(self) -> str:
+        """Format the notepad section for the prompt."""
+        if not self.enable_notepad:
+            return ""
+        if not self.notes:
+            return "No notes yet."
+        formatted_notes = []
+        for i, note in enumerate(self.notes, start=1):
+            formatted_notes.append(f"{i}. {note}")
+        return "\n".join(formatted_notes)
 
     def _parse_action(self, response_text: str) -> Action:
         thought_match = re.search(
@@ -185,6 +206,24 @@ class DoubaoAgent(Agent):
                 content_match = re.search(r"content='([^']*)'", action_text)
                 if content_match:
                     params["content"] = content_match.group(1)
+            elif action_text.startswith("note_create("):
+                action_type = "note_create"
+                content_match = re.search(r"content='([^']*)'", action_text)
+                if content_match:
+                    params["content"] = content_match.group(1)
+            elif action_text.startswith("note_edit("):
+                action_type = "note_edit"
+                index_match = re.search(r"index=(\d+)", action_text)
+                content_match = re.search(r"content='([^']*)'", action_text)
+                if index_match:
+                    params["index"] = int(index_match.group(1))
+                if content_match:
+                    params["content"] = content_match.group(1)
+            elif action_text.startswith("note_remove("):
+                action_type = "note_remove"
+                index_match = re.search(r"index=(\d+)", action_text)
+                if index_match:
+                    params["index"] = int(index_match.group(1))
         else:
             raise ValueError(f"Cannot parse the action: {response_text}")
 
@@ -207,6 +246,9 @@ class DoubaoAgent(Agent):
             "press_home": "magenta",
             "press_back": "magenta",
             "finished": "bold green",
+            "note_create": "bold cyan",
+            "note_edit": "bold yellow",
+            "note_remove": "bold red",
         }
         color = action_colors.get(action_type, "white")
 
@@ -254,6 +296,56 @@ class DoubaoAgent(Agent):
                 ),
                 extra={"markup": True},
             )
+        elif action_type == "note_create":
+            content = params["content"]
+            self.notes.append(content)
+            display_content = content[:50] + "..." if len(content) > 50 else content
+            self.logger.info(
+                f'[bold cyan] Note created:[/] [italic]"{display_content}"[/] '
+                f"[dim]({len(self.notes)} total notes)[/]",
+                extra={"markup": True},
+            )
+        elif action_type == "note_edit":
+            index = params["index"]
+            content = params["content"]
+            if index < 1 or index > len(self.notes):
+                self.logger.error(
+                    f"[bold red]{TIMES} Invalid note index: {index}[/] "
+                    f"[dim](valid range: 1-{len(self.notes)})[/]",
+                    extra={"markup": True},
+                )
+                raise ValueError(
+                    f"Invalid note index: {index}. Valid range: 1-{len(self.notes)}"
+                )
+            old_content = self.notes[index - 1]
+            self.notes[index - 1] = content
+            display_old = (
+                old_content[:30] + "..." if len(old_content) > 30 else old_content
+            )
+            display_new = content[:30] + "..." if len(content) > 30 else content
+            self.logger.info(
+                f"[bold yellow] Note {index} edited:[/] "
+                f'[dim italic]"{display_old}"[/] [dim]→[/] [italic]"{display_new}"[/]',
+                extra={"markup": True},
+            )
+        elif action_type == "note_remove":
+            index = params["index"]
+            if index < 1 or index > len(self.notes):
+                self.logger.error(
+                    f"[bold red]{TIMES} Invalid note index: {index}[/] "
+                    f"[dim](valid range: 1-{len(self.notes)})[/]",
+                    extra={"markup": True},
+                )
+                raise ValueError(
+                    f"Invalid note index: {index}. Valid range: 1-{len(self.notes)}"
+                )
+            removed = self.notes.pop(index - 1)
+            display_removed = removed[:50] + "..." if len(removed) > 50 else removed
+            self.logger.info(
+                f'[bold red] Note {index} removed:[/] [italic]"{display_removed}"[/] '
+                f"[dim]({len(self.notes)} notes remaining)[/]",
+                extra={"markup": True},
+            )
         else:
             self.logger.error(
                 f"[bold red]{TIMES} Unknown action type: {action}[/]",
@@ -290,8 +382,11 @@ class DoubaoAgent(Agent):
 
     def predict(self) -> Action:
         if not self.history:
-            prompt = DOUBAO_PROMPT.format(
-                language=self.language.value, instruction=self.task_name
+            notepad_section = self._format_notepad()
+            prompt = self.prompt_template.format(
+                language=self.language.value,
+                notepad_section=notepad_section,
+                instruction=self.task_name,
             )
             self.logger.info(
                 f"[bold magenta]{ROCKET} Task Started[/]\n"

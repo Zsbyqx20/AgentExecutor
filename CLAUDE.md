@@ -36,6 +36,7 @@ The codebase follows a three-layer architecture:
    - Auto-detects devices or uses specified `device_id`
    - Handles screenshots (PIL Image or base64), touch input, text entry, navigation
    - Automatically sets ADB keyboard as IME for text input
+   - Maintains app name-to-package mapping with fuzzy matching for flexible app launching
 
 2. **`api.py`** - API Client Layer
    - Generic LLM API client (OpenAI-compatible)
@@ -46,6 +47,7 @@ The codebase follows a three-layer architecture:
    - `Agent` (abstract base class) - extensible for different LLM providers
    - `DoubaoAgent` - concrete implementation for Doubao/Ark models
    - Orchestrates the predict-execute loop: screenshot → LLM → parse action → execute
+   - Implements retry logic for API failures and comprehensive error debugging
 
 ### Execution Flow
 
@@ -69,7 +71,15 @@ Defined in `DOUBAO_PROMPT`:
 - `scroll(point, direction)`
 - `drag(start_point, end_point)`
 - `press_home()`, `press_back()`
+- `open_app(app_name)` - with fuzzy matching support
 - `finished(content)` - terminates the task loop
+
+### Logging System
+
+The project uses a professional dual-output logging system with Rich:
+- **Console**: Clean INFO+ level output with colored Nerd Font icons
+- **Files**: Detailed DEBUG+ logs with full context in `logs/` directory
+- Rotating file handlers with size limits (10MB per file, 5 backups)
 
 ### History Management
 
@@ -95,4 +105,6 @@ API_KEY=your_api_key_here
 - `PIL` - Image processing
 - `requests` - HTTP client for LLM API
 - `python-dotenv` - Environment configuration
-- `rich` - Terminal output (available but not yet utilized)
+- `rich` - Professional terminal output and logging
+
+The project uses `uv` for dependency management with a locked `uv.lock` file.
