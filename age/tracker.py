@@ -47,6 +47,8 @@ class ActionTracker:
         language: str,
         output_dir: Path | str,
         logger: logging.Logger,
+        screen_size: tuple[int, int],
+        touch_range: tuple[int, int] = (32767, 32767),
     ) -> None:
         """Initialize the action tracker.
 
@@ -56,6 +58,8 @@ class ActionTracker:
             language: The language setting (CN/EN)
             output_dir: Directory to store tracking output
             logger: Logger instance for output
+            screen_size: Device screen size as (width, height) in pixels
+            touch_range: Max touch coordinates as (x_max, y_max)
         """
         self.task_name = task_name
         self.model_name = model_name
@@ -84,6 +88,11 @@ class ActionTracker:
         self.video_path: Path = self.task_dir / "recording.mp4"
         self.video_start_timestamp: datetime | None = None
 
+        # Device info for JSON output
+        self.screen_size = {"width": screen_size[0], "height": screen_size[1]}
+        self.touch_range = {"x_max": touch_range[0], "y_max": touch_range[1]}
+        self.session_start = datetime.now()
+
         self.logger.info(
             f"[cyan]{FOLDER} Tracking directory:[/] {self.task_dir}",
             extra={"markup": True},
@@ -94,6 +103,7 @@ class ActionTracker:
         action: Action,
         screenshot_b64: str,
         timestamp: datetime,
+        duration: float = 0.0,
     ) -> None:
         """Record an action with annotated screenshot.
 
@@ -101,6 +111,7 @@ class ActionTracker:
             action: The action dict with type, params, and thought
             screenshot_b64: Base64-encoded screenshot (PNG format)
             timestamp: When the action was recorded
+            duration: Execution time in seconds
         """
         try:
             # Decode base64 screenshot to PIL Image
@@ -122,7 +133,7 @@ class ActionTracker:
             self.actions.append({
                 "step": step_num,
                 "timestamp": timestamp,
-                "action": action,
+                "action": {**action, "duration": duration},
                 "screenshot_path": screenshot_path.name,
             })
 
@@ -138,31 +149,38 @@ class ActionTracker:
             )
             # Don't raise - allow agent to continue
 
-    def finalize(self) -> Path:
-        """Generate markdown trace and return path to the file.
+    def finalize(self) -> tuple[Path, Path]:
+        """Generate markdown trace and JSON log.
 
         Returns:
-            Path to the generated trace.md file
+            Tuple of (trace_path, json_path) to generated files
         """
         try:
+            # Generate markdown
             markdown = self._generate_markdown()
             trace_path = self.task_dir / "trace.md"
             trace_path.write_text(markdown, encoding="utf-8")
 
+            # Generate JSON
+            json_data = self._generate_actions_json()
+            json_path = self.task_dir / "actions.json"
+            json_path.write_text(json_data, encoding="utf-8")
+
             self.logger.info(
-                f"[cyan]{FILE} Trace saved to:[/] {trace_path}",
+                f"[cyan]{FILE} Trace saved to:[/] {trace_path}\n"
+                f"[cyan]{FILE} Actions JSON saved to:[/] {json_path}",
                 extra={"markup": True},
             )
 
-            return trace_path
+            return trace_path, json_path
 
         except Exception as e:
             self.logger.error(
-                f"[bold red]{TIMES} Failed to generate trace:[/] {e}",
+                f"[bold red]{TIMES} Failed to generate trace/JSON:[/] {e}",
                 extra={"markup": True},
             )
-            # Return path even if generation failed
-            return self.task_dir / "trace.md"
+            # Return paths even if generation failed
+            return self.task_dir / "trace.md", self.task_dir / "actions.json"
 
     def start_video_recording(self, device) -> bool:
         """Start video recording on the device.
@@ -581,6 +599,56 @@ class ActionTracker:
                 font=self.font,
             )
 
+    def _calc_scroll_end(self, start: tuple[int, int], direction: str) -> dict:
+        """Calculate scroll end position based on direction.
+
+        Args:
+            start: Normalized (x, y) start coordinates
+            direction: Scroll direction (up, down, left, right)
+
+        Returns:
+            {"x": int, "y": int} end position
+        """
+        distance = 500  # Approximate scroll distance in normalized coordinates
+        vectors = {
+            "up": (0, -distance),
+            "down": (0, distance),
+            "left": (-distance, 0),
+            "right": (distance, 0),
+        }
+        dx, dy = vectors.get(direction, (0, distance))
+        return {"x": start[0] + dx, "y": start[1] + dy}
+
+    def _calc_distance(self, start: tuple[int, int], end: tuple[int, int]) -> float:
+        """Calculate Euclidean distance between two points.
+
+        Args:
+            start: (x, y) start coordinates
+            end: (x, y) end coordinates
+
+        Returns:
+            Distance as float
+        """
+        return round(((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2) ** 0.5, 1)
+
+    def _calc_direction(self, start: tuple[int, int], end: tuple[int, int]) -> str:
+        """Calculate primary direction from start to end.
+
+        Args:
+            start: (x, y) start coordinates
+            end: (x, y) end coordinates
+
+        Returns:
+            Direction string: "up", "down", "left", or "right"
+        """
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+
+        if abs(dx) > abs(dy):
+            return "right" if dx > 0 else "left"
+        else:
+            return "down" if dy > 0 else "up"
+
     def _generate_markdown(self) -> str:
         """Generate markdown execution trace.
 
@@ -664,3 +732,188 @@ class ActionTracker:
         for char in escape_chars:
             text = text.replace(char, f"\\{char}")
         return text
+
+    def _convert_action_to_json(self, action_data: dict) -> dict | None:
+        """Convert internal action format to JSON action format.
+
+        Args:
+            action_data: Internal action dict with step, timestamp, action, screenshot_path
+
+        Returns:
+            JSON-formatted action dict or None for unknown action types
+        """
+        action = action_data["action"]
+        action_type = action["action_type"]
+        params = action["params"]
+        duration = action.get("duration", 0.0)
+
+        timestamp = action_data["timestamp"]
+        relative_time = (timestamp - self.session_start).total_seconds()
+        unix_ts = timestamp.timestamp()
+
+        # Click actions
+        if action_type in ("click", "long_press"):
+            point = params.get("point", (500, 500))
+            return {
+                "type": "click",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "position": {"x": point[0], "y": point[1]},
+                "duration": round(duration, 3),
+            }
+
+        # Scroll action
+        if action_type == "scroll":
+            point = params.get("point", (500, 500))
+            direction = params.get("direction", "down")
+            return {
+                "type": "swipe",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "start_position": {"x": point[0], "y": point[1]},
+                "end_position": self._calc_scroll_end(point, direction),
+                "distance": 500,  # Approximate scroll distance in normalized coords
+                "direction": direction,
+                "duration": round(duration, 3),
+            }
+
+        # Drag action
+        if action_type == "drag":
+            start = params.get("start_point", (200, 500))
+            end = params.get("end_point", (800, 500))
+            return {
+                "type": "swipe",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "start_position": {"x": start[0], "y": start[1]},
+                "end_position": {"x": end[0], "y": end[1]},
+                "distance": self._calc_distance(start, end),
+                "direction": self._calc_direction(start, end),
+                "duration": round(duration, 3),
+            }
+
+        # Key press actions
+        if action_type == "press_home":
+            return {
+                "type": "key_press",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "key": "KEY_HOME",
+                "duration": round(duration, 3),
+            }
+
+        if action_type == "press_back":
+            return {
+                "type": "key_press",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "key": "KEY_BACK",
+                "duration": round(duration, 3),
+            }
+
+        # Type action
+        if action_type == "type":
+            return {
+                "type": "type",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "content": params.get("content", ""),
+                "duration": round(duration, 3),
+            }
+
+        # Open app action
+        if action_type == "open_app":
+            return {
+                "type": "open_app",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "app_name": params.get("app", ""),
+                "duration": round(duration, 3),
+            }
+
+        # Wait action
+        if action_type == "wait":
+            return {
+                "type": "wait",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "seconds": params.get("seconds", 1),
+                "duration": round(duration, 3),
+            }
+
+        # Notepad actions
+        if action_type == "note_create":
+            return {
+                "type": "note_create",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "content": params.get("content", ""),
+                "duration": round(duration, 3),
+            }
+
+        if action_type == "note_edit":
+            return {
+                "type": "note_edit",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "index": params.get("index", 1),
+                "content": params.get("content", ""),
+                "duration": round(duration, 3),
+            }
+
+        if action_type == "note_remove":
+            return {
+                "type": "note_remove",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "index": params.get("index", 1),
+                "duration": round(duration, 3),
+            }
+
+        # Finished action
+        if action_type == "finished":
+            return {
+                "type": "finished",
+                "timestamp": unix_ts,
+                "relative_time": round(relative_time, 3),
+                "content": params.get("content", ""),
+                "duration": round(duration, 3),
+            }
+
+        # Unknown action type - shouldn't happen
+        return None
+
+    def _generate_actions_json(self) -> str:
+        """Generate machine-readable JSON action log.
+
+        Returns:
+            Complete JSON document as string
+        """
+        import json
+
+        session_end = datetime.now()
+
+        # Convert actions to JSON format
+        json_actions = []
+        for action_data in self.actions:
+            json_action = self._convert_action_to_json(action_data)
+            if json_action:
+                json_actions.append(json_action)
+
+        # Build complete JSON structure
+        output = {
+            "device_info": {
+                "screen_size": self.screen_size,
+                "touch_range": self.touch_range,
+            },
+            "session_start": self.session_start.isoformat(),
+            "session_end": session_end.isoformat(),
+            "video_recording_start": (
+                self.video_start_timestamp.isoformat()
+                if self.video_start_timestamp
+                else None
+            ),
+            "actions": json_actions,
+        }
+
+        return json.dumps(output, indent=2, ensure_ascii=False)

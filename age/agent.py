@@ -116,6 +116,8 @@ class DoubaoAgent(Agent):
                 language=self.language.value,
                 output_dir=tracking_output_dir or Path("tracks"),
                 logger=self.logger,
+                screen_size=self.device.size,
+                touch_range=(32767, 32767),
             )
 
             # Start video recording
@@ -291,8 +293,15 @@ class DoubaoAgent(Agent):
 
         return Action(action_type=action_type, params=params, thought=thought)
 
-    def _execute(self, action: Action) -> None:
+    def _execute(self, action: Action) -> float:
+        """Execute action and return duration.
+
+        Returns:
+            Execution time in seconds
+        """
         from .device import Direction
+
+        start_time = time.perf_counter()
 
         action_type = action["action_type"]
         params = action["params"]
@@ -421,6 +430,9 @@ class DoubaoAgent(Agent):
             )
             raise ValueError(f"Unknown action type: {action}")
 
+        end_time = time.perf_counter()
+        return end_time - start_time
+
     def _compress_history(self):
         if not self.history:
             return []
@@ -500,7 +512,7 @@ class DoubaoAgent(Agent):
         self.logger.debug(f"Response length: {len(response.response)} chars")
 
         action = self._parse_action(response.response)
-        self._execute(action)
+        duration = self._execute(action)
 
         # Record action for tracking
         if self.tracker:
@@ -508,13 +520,15 @@ class DoubaoAgent(Agent):
                 action=action,
                 screenshot_b64=screenshot_for_tracker,
                 timestamp=datetime.now(),
+                duration=duration,
             )
 
             # Finalize tracking on finished action
             if action["action_type"] == "finished":
                 # Stop video recording before finalizing
                 self.tracker.stop_video_recording(self.device)
-                self.tracker.finalize()
+                trace_path, json_path = self.tracker.finalize()
+                self.logger.debug(f"Generated {trace_path} and {json_path}")
 
         self.history.extend(messages)
         self.history.append({"role": "assistant", "content": response.response})
