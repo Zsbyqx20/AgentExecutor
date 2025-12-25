@@ -11,6 +11,7 @@ from PIL.Image import Image
 
 from .icons import KEYBOARD, PHONE, TIMES, VIDEO, WARNING
 from .logger import get_logger
+from .video_recorder import VideoRecorder
 
 
 class Direction(str, Enum):
@@ -53,6 +54,7 @@ class Device:
 
         self._set_ime()
         self._is_recording = False
+        self._video_recorder: VideoRecorder | None = None
 
         self.app_name_mapping = self._device.shell([
             "content",
@@ -321,15 +323,47 @@ class Device:
         self._device.keyevent("BACK")
         time.sleep(1)
 
-    def start_recording(self, video_path: str):
+    def start_recording(self, video_path: str | None = None) -> bool:
+        """Start video recording using scrcpy.
+
+        Args:
+            video_path: Optional path for output video file. If not provided,
+                        uses a default path in current directory.
+
+        Returns:
+            True if recording started successfully, False otherwise.
+        """
+        output_path = video_path or "recording.mp4"
+
         self.logger.info(
-            f"[dim]{VIDEO} Starting recording:[/] {video_path}",
+            f"[dim]{VIDEO} Starting recording:[/] {output_path}",
             extra={"markup": True},
         )
-        self._device.start_recording(video_path)
-        self._is_recording = True
 
-    def end_recording(self):
-        if self._is_recording:
+        self._video_recorder = VideoRecorder(
+            output_path=output_path,
+            device_serial=self._device_id,
+        )
+
+        if self._video_recorder.start_recording():
+            self._is_recording = True
+            return True
+        else:
+            if self._video_recorder.error_message:
+                self.logger.warning(
+                    f"[dim]{WARNING} Recording unavailable:[/] {self._video_recorder.error_message}",
+                    extra={"markup": True},
+                )
+            return False
+
+    def end_recording(self) -> None:
+        """Stop video recording using scrcpy."""
+        if self._is_recording and self._video_recorder:
             self.logger.info(f"{VIDEO} Stopping recording", extra={"markup": True})
-            self._device.stop_recording()
+            self._video_recorder.stop_recording()
+            self._is_recording = False
+
+    @property
+    def recording_error(self) -> str | None:
+        """Return the last recording error message, if any."""
+        return self._video_recorder.error_message if self._video_recorder else None

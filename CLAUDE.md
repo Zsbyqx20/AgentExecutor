@@ -20,9 +20,6 @@ poe fix
 
 # Apply unsafe fixes
 poe fix_unsafe
-
-# Type check only
-pyright
 ```
 
 ## Architecture
@@ -35,6 +32,7 @@ The codebase follows a three-layer architecture:
 - **`logger.py`** - Logger factory for consistent logger instances
 - **`icons.py`** - Nerd Font icons for terminal output
 - **`tracker.py`** - Action tracking system for generating execution traces with annotated screenshots
+- **`video_recorder.py`** - Scrcpy-based video recording for screen capture
 
 ### Core Modules (`age/`)
 
@@ -44,6 +42,7 @@ The codebase follows a three-layer architecture:
    - Handles screenshots (PIL Image or base64), touch input, text entry, navigation
    - Automatically sets ADB keyboard as IME for text input
    - Maintains app name-to-package mapping with fuzzy matching for flexible app launching
+   - Integrated `VideoRecorder` for scrcpy-based screen recording (gracefully handles scrcpy unavailability)
 
 2. **`api.py`** - API Client Layer
    - Generic LLM API client (OpenAI-compatible)
@@ -141,11 +140,12 @@ tracks/
 ```
 
 **Video Recording:**
+- Uses scrcpy for reliable screen capture (requires scrcpy installation)
 - Starts automatically when tracking is enabled
 - Records entire task execution from start to finish
 - Saved as MP4 format in task directory
 - Referenced in markdown trace with embedded HTML5 video player
-- Gracefully handles recording failures without disrupting task execution
+- Gracefully handles recording failures (e.g., scrcpy not installed) without disrupting task execution
 
 **Action Visualizations:**
 - Click/Long Press: Green circle with center dot
@@ -169,6 +169,7 @@ API_KEY=your_api_key_here
 - Android device connected via ADB
 - ADB keyboard (`com.android.adbkeyboard/.AdbIME`) will be automatically enabled
 - Device auto-selection uses the first available device if `device_id` is not specified
+- **scrcpy** (optional) - Required for video recording in action tracking; gracefully degrades if not installed
 
 ## Dependencies
 

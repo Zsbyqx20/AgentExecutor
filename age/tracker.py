@@ -204,7 +204,7 @@ class ActionTracker:
         try:
             device.end_recording()
             self.logger.info(
-                f"{VIDEO} Video recording stopped[/]",
+                f"[cyan]{VIDEO} Video recording stopped[/]",
                 extra={"markup": True},
             )
             self.video_enabled = False
