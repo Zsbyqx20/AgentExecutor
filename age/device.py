@@ -294,6 +294,13 @@ class Device:
         package = self._device.app_current().package
         return self._all_apps.get(package, package)
 
+    def kill_current_app(self):
+        """Kill the current app using am force-stop."""
+        package = self._device.app_current().package
+        self.logger.debug(f'kill_current_app("{package}")')
+        self._device.shell(["am", "force-stop", package])
+        time.sleep(1)
+
     def scroll(
         self,
         start_x: int,
