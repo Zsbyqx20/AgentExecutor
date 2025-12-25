@@ -81,8 +81,7 @@ class ActionTracker:
 
         # Video recording state
         self.video_enabled: bool = False
-        self.device_video_path: str = "/sdcard/agent_recording.mp4"
-        self.local_video_path: Path | None = None
+        self.video_path: Path = self.task_dir / "recording.mp4"
         self.video_start_timestamp: datetime | None = None
 
         self.logger.info(
@@ -175,11 +174,11 @@ class ActionTracker:
             True if recording started successfully, False otherwise
         """
         try:
-            device.start_recording(self.device_video_path)
+            device.start_recording(str(self.video_path))
             self.video_enabled = True
             self.video_start_timestamp = datetime.now()
             self.logger.info(
-                f"[cyan]{VIDEO} Video recording started[/]",
+                f"[cyan]{VIDEO} Video recording started:[/] {self.video_path}",
                 extra={"markup": True},
             )
             return True
@@ -191,13 +190,13 @@ class ActionTracker:
             return False
 
     def stop_video_recording(self, device) -> bool:
-        """Stop video recording and pull file to local storage.
+        """Stop video recording.
 
         Args:
             device: Device instance to control recording
 
         Returns:
-            True if video was pulled successfully, False otherwise
+            True if recording stopped successfully, False otherwise
         """
         if not self.video_enabled:
             return False
@@ -205,23 +204,11 @@ class ActionTracker:
         try:
             device.end_recording()
             self.logger.info(
-                f"{VIDEO} Video recording stopped",
+                f"{VIDEO} Video recording stopped[/]",
                 extra={"markup": True},
             )
-
-            self.local_video_path = self.task_dir / "recording.mp4"
-            success = device.pull_recording(
-                self.device_video_path, self.local_video_path
-            )
-
-            if success:
-                self.logger.info(
-                    f"[cyan]{VIDEO} Video saved to:[/] {self.local_video_path}",
-                    extra={"markup": True},
-                )
-
             self.video_enabled = False
-            return success
+            return True
 
         except Exception as e:
             self.logger.error(
@@ -237,7 +224,7 @@ class ActionTracker:
         Returns:
             Markdown string with video reference or empty string if no video
         """
-        if not self.local_video_path or not self.local_video_path.exists():
+        if not self.video_path.exists():
             return ""
 
         lines = ["## Video Recording\n"]

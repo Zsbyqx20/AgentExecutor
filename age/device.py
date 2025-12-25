@@ -4,7 +4,6 @@ import time
 from difflib import get_close_matches
 from enum import Enum
 from io import BytesIO
-from pathlib import Path
 from typing import Literal, overload
 
 from adbutils import adb
@@ -334,33 +333,3 @@ class Device:
         if self._is_recording:
             self.logger.info(f"{VIDEO} Stopping recording", extra={"markup": True})
             self._device.stop_recording()
-
-    def pull_recording(self, device_path: str, local_path: Path) -> bool:
-        """Pull a recorded video file from device to local storage.
-
-        Args:
-            device_path: Path to video file on device (e.g., /sdcard/recording.mp4)
-            local_path: Local destination path
-
-        Returns:
-            True if pull succeeded, False otherwise
-        """
-        try:
-            self.logger.debug(
-                f"[dim]Pulling recording:[/] {device_path} -> {local_path}",
-                extra={"markup": True},
-            )
-            self._device.sync.pull(device_path, str(local_path))
-            # Clean up device file after successful pull
-            self._device.shell(["rm", device_path])
-            self.logger.debug(
-                f"[dim]Cleaned up device file:[/] {device_path}",
-                extra={"markup": True},
-            )
-            return True
-        except Exception as e:
-            self.logger.error(
-                f"[bold red]{TIMES} Failed to pull recording:[/] {e}",
-                extra={"markup": True},
-            )
-            return False
