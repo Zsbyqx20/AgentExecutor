@@ -8,7 +8,17 @@ from typing import Literal, TypedDict
 
 from .api import APIClient
 from .device import Device
-from .icons import CHECK, GEAR, MAGIC, ROCKET, ROTATE_LEFT, THOUGHT, TIMES, TROPHY
+from .icons import (
+    CHECK,
+    GEAR,
+    MAGIC,
+    ROCKET,
+    ROTATE_LEFT,
+    THOUGHT,
+    TIMES,
+    TROPHY,
+    WARNING,
+)
 from .logger import get_logger
 
 
@@ -94,6 +104,7 @@ class DoubaoAgent(Agent):
         enable_notepad: bool = False,
         enable_tracking: bool = False,
         tracking_output_dir: str | Path | None = None,
+        max_steps: int | None = None,
     ) -> None:
         super().__init__(device_id)
         self.name = "Doubao"
@@ -106,6 +117,8 @@ class DoubaoAgent(Agent):
         self.logger = get_logger(__name__)
         self.enable_notepad = enable_notepad
         self.notes: list[str] = []
+        self.current_step = 0
+        self.max_steps = max_steps
         self.tracker = None
         if enable_tracking:
             from .tracker import ActionTracker
@@ -127,6 +140,7 @@ class DoubaoAgent(Agent):
         self.task_name = kwargs.get("task_name", "")
         self.history = []
         self.notes = []
+        self.current_step = 0
         self.logger.info(
             f"[bold magenta]{ROTATE_LEFT} Agent reset[/]",
             extra={"markup": True},
@@ -325,7 +339,7 @@ class DoubaoAgent(Agent):
         color = action_colors.get(action_type, "white")
 
         self.logger.info(
-            f"[{color}]{GEAR} {action_type}[/]",
+            f"[{color}]{GEAR} {action_type}[/]\n",
             extra={"markup": True},
         )
         self.logger.debug(f"Action parameters: {params}")
@@ -471,6 +485,36 @@ class DoubaoAgent(Agent):
         else:
             prompt = "Please continue"
 
+        # Check step limit
+        self.current_step += 1
+        if self.max_steps is not None and self.current_step > self.max_steps:
+            self.logger.warning(
+                f"[bold yellow]{WARNING} Maximum steps reached ({self.max_steps})[/]\n"
+                f"[dim]Forcing task completion[/]\n",
+                extra={"markup": True},
+            )
+            forced_action = Action(
+                action_type="finished",
+                params={"content": "Maximum steps reached"},
+                thought="Reached maximum step limit - forcing completion",
+            )
+            # Execute the forced finished action (for tracking and logging)
+            duration = self._execute(forced_action)
+            # Record action for tracking if enabled
+            if self.tracker:
+                screenshot = self.device.capture_screenshot("B64")
+                self.tracker.record_action(
+                    action=forced_action,
+                    screenshot_b64=screenshot,
+                    timestamp=datetime.now(),
+                    duration=duration,
+                )
+                # Finalize tracking
+                self.tracker.stop_video_recording(self.device)
+                trace_path, json_path = self.tracker.finalize()
+                self.logger.debug(f"Generated {trace_path} and {json_path}")
+            return forced_action
+
         self.logger.debug("Capturing screenshot...")
         screenshot = self.device.capture_screenshot("B64")
         self.logger.debug(f"Screenshot captured: {len(screenshot)} chars (base64)")
@@ -491,7 +535,7 @@ class DoubaoAgent(Agent):
             }
         ]
 
-        self.logger.info(
+        self.logger.debug(
             f"[bold blue]{MAGIC} Requesting LLM prediction[/] ({self.model_name})",
             extra={"markup": True},
         )
