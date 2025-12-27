@@ -1,4 +1,4 @@
-from .agent import Agent, DoubaoAgent
+from .agents import Action, Agent, DoubaoAgent, Language, RGMAgent
 from .api import APIClient
 from .device import Device
 from .logging_config import setup_logging
@@ -16,5 +16,8 @@ __all__ = [
     "APIClient",
     "Agent",
     "DoubaoAgent",
+    "RGMAgent",
+    "Action",
+    "Language",
     "setup_logging",
 ]

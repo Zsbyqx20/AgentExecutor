@@ -1,14 +1,10 @@
 import re
 import time
-from abc import ABC, abstractmethod
-from datetime import datetime
-from enum import Enum
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal
 
-from .api import APIClient
-from .device import Device
-from .icons import (
+from ..api import APIClient
+from ..icons import (
     CHECK,
     ERASER,
     GEAR,
@@ -20,33 +16,8 @@ from .icons import (
     TROPHY,
     WARNING,
 )
-from .logger import get_logger
-
-
-class Action(TypedDict):
-    action_type: str
-    params: dict
-    thought: str
-
-
-class Language(str, Enum):
-    CN = "Chinese"
-    EN = "English"
-
-
-class Agent(ABC):
-    def __init__(self, device_id: str | None = None) -> None:
-        super().__init__()
-        self.device = Device(device_id)
-
-    @abstractmethod
-    def predict(self) -> Action:
-        pass
-
-    @abstractmethod
-    def reset(self, **kwargs) -> None:
-        pass
-
+from ..logger import get_logger
+from .base import Action, Agent, Language
 
 # Base prompt components
 _BASE_PROMPT_PREFIX = """You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task. 
@@ -108,41 +79,32 @@ class DoubaoAgent(Agent):
         tracking_output_dir: str | Path | None = None,
         max_steps: int | None = None,
     ) -> None:
-        super().__init__(device_id)
+        # Initialize base class with tracking and step limiting parameters
+        super().__init__(
+            device_id=device_id,
+            enable_tracking=enable_tracking,
+            tracking_output_dir=tracking_output_dir,
+            task_name=task_name,
+            model_name=model_name,
+            language=Language[language.upper()].value,
+            max_steps=max_steps,
+        )
         self.name = "Doubao"
         self.model_name = model_name
         self.task_name = task_name
         self.window_size = self.device.size
         self.language = Language[language.upper()]
-        self.client = APIClient()
+        self.client = APIClient(prefix=self.name)
         self.history = []
         self.logger = get_logger(__name__)
         self.enable_notepad = enable_notepad
         self.notes: list[str] = []
-        self.current_step = 0
-        self.max_steps = max_steps
-        self.tracker = None
-        if enable_tracking:
-            from .tracker import ActionTracker
-
-            self.tracker = ActionTracker(
-                task_name=self.task_name,
-                model_name=self.model_name,
-                language=self.language.value,
-                output_dir=tracking_output_dir or Path("tracks"),
-                logger=self.logger,
-                screen_size=self.device.size,
-                touch_range=(32767, 32767),
-            )
-
-            # Start video recording
-            self.tracker.start_video_recording(self.device)
 
     def reset(self, **kwargs) -> None:
+        super().reset(**kwargs)  # Reset step counter
         self.task_name = kwargs.get("task_name", "")
         self.history = []
         self.notes = []
-        self.current_step = 0
         self.logger.info(
             f"[bold magenta]{ROTATE_LEFT} Agent reset[/]",
             extra={"markup": True},
@@ -317,7 +279,7 @@ class DoubaoAgent(Agent):
         Returns:
             Execution time in seconds
         """
-        from .device import Direction
+        from ..device import Direction
 
         start_time = time.perf_counter()
 
@@ -496,34 +458,25 @@ class DoubaoAgent(Agent):
         else:
             prompt = "Please continue"
 
-        # Check step limit
-        self.current_step += 1
-        if self.max_steps is not None and self.current_step > self.max_steps:
+        # Check step limit (using base class method)
+        forced_action = self._check_step_limit()
+        if forced_action:
             self.logger.warning(
                 f"[bold yellow]{WARNING} Maximum steps reached ({self.max_steps})[/]\n"
                 f"[dim]Forcing task completion[/]\n",
                 extra={"markup": True},
-            )
-            forced_action = Action(
-                action_type="finished",
-                params={"content": "Maximum steps reached"},
-                thought="Reached maximum step limit - forcing completion",
             )
             # Execute the forced finished action (for tracking and logging)
             duration = self._execute(forced_action)
             # Record action for tracking if enabled
             if self.tracker:
                 screenshot = self.device.capture_screenshot("B64")
-                self.tracker.record_action(
-                    action=forced_action,
-                    screenshot_b64=screenshot,
-                    timestamp=datetime.now(),
-                    duration=duration,
-                )
+                self._record_action(forced_action, screenshot, duration)
                 # Finalize tracking
-                self.tracker.stop_video_recording(self.device)
-                trace_path, json_path = self.tracker.finalize()
-                self.logger.debug(f"Generated {trace_path} and {json_path}")
+                result = self._finalize_tracking()
+                if result:
+                    trace_path, json_path = result
+                    self.logger.debug(f"Generated {trace_path} and {json_path}")
             return forced_action
 
         self.logger.debug("Capturing screenshot...")
@@ -571,19 +524,14 @@ class DoubaoAgent(Agent):
 
         # Record action for tracking
         if self.tracker:
-            self.tracker.record_action(
-                action=action,
-                screenshot_b64=screenshot_for_tracker,
-                timestamp=datetime.now(),
-                duration=duration,
-            )
+            self._record_action(action, screenshot_for_tracker, duration)
 
             # Finalize tracking on finished action
             if action["action_type"] == "finished":
-                # Stop video recording before finalizing
-                self.tracker.stop_video_recording(self.device)
-                trace_path, json_path = self.tracker.finalize()
-                self.logger.debug(f"Generated {trace_path} and {json_path}")
+                result = self._finalize_tracking()
+                if result:
+                    trace_path, json_path = result
+                    self.logger.debug(f"Generated {trace_path} and {json_path}")
 
         self.history.extend(messages)
         self.history.append({"role": "assistant", "content": response.response})

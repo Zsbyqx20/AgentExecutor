@@ -16,11 +16,13 @@ class Response(NamedTuple):
 
 
 class APIClient:
-    def __init__(self) -> None:
+    def __init__(self, prefix: str = "") -> None:
+        base_url_name = prefix.upper() + "_BASE_URL" if prefix else "BASE_URL"
+        api_key_name = prefix.upper() + "_API_KEY" if prefix else "API_KEY"
         self._complete_url = os.environ.get(
-            "BASE_URL", "https://api.openai.com/v1/chat/completions"
+            base_url_name, "https://api.openai.com/v1/chat/completions"
         )
-        assert os.environ.get("API_KEY"), (
+        assert os.environ.get(api_key_name), (
             "You must provide an API key in your environment variables!"
         )
         self._api_key = os.environ.get("API_KEY", "")

@@ -16,7 +16,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import Image as PILImage
 
-from .agent import Action
+from .agents import Action
 from .icons import FILE, FOLDER, TIMES, VIDEO
 
 
