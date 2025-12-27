@@ -16,6 +16,7 @@ WARNING = "\uf071"  # Warning
 PHONE = "\uf10b"  # Device
 KEYBOARD = "\uf11c"  # Keyboard/IME
 VIDEO = "\uf12d"  # Screen recording
+ERASER = "\uf4b9"  # Eraser/clear text
 REFRESH = "\uf021"  # Retry
 ROTATE_LEFT = "\uf2ea"  # Reset
 FILE = "\uf15b"  # File/trace/document

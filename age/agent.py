@@ -10,6 +10,7 @@ from .api import APIClient
 from .device import Device
 from .icons import (
     CHECK,
+    ERASER,
     GEAR,
     MAGIC,
     ROCKET,
@@ -62,6 +63,7 @@ _BASE_ACTIONS = """open_app(app='xxx')
 click(point='<point>x1 y1</point>')
 long_press(point='<point>x1 y1</point>')
 type(content='') #If you want to submit your input, use "\\n" at the end of `content`.
+clear_text() # Clear all text in the currently activated textbox
 scroll(point='<point>x1 y1</point>', direction='down or up or right or left')
 drag(start_point='<point>x1 y1</point>', end_point='<point>x2 y2</point>')
 press_home()
@@ -274,6 +276,8 @@ class DoubaoAgent(Agent):
                 action_type = "press_home"
             elif action_text == "press_back()":
                 action_type = "press_back"
+            elif action_text == "clear_text()":
+                action_type = "clear_text"
             elif action_text.startswith("wait("):
                 action_type = "wait"
                 seconds_match = re.search(r"seconds=(\d+)", action_text)
@@ -325,6 +329,7 @@ class DoubaoAgent(Agent):
             "click": "green",
             "long_press": "green",
             "type": "blue",
+            "clear_text": "bold red",
             "scroll": "yellow",
             "drag": "purple",
             "open_app": "cyan",
@@ -375,6 +380,12 @@ class DoubaoAgent(Agent):
             self.device.navigate_home()
         elif action_type == "press_back":
             self.device.navigate_back()
+        elif action_type == "clear_text":
+            self.logger.info(
+                f"[bold red]{ERASER} Clearing text input[/]",
+                extra={"markup": True},
+            )
+            self.device.clear_text()
         elif action_type == "wait":
             seconds = params["seconds"]
             self.logger.debug(f"Waiting for {seconds} second(s)...")

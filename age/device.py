@@ -169,6 +169,12 @@ class Device:
         ])
         time.sleep(1)
 
+    def clear_text(self):
+        """Clear all text in currently activated textbox."""
+        self.logger.debug("clear_text()")
+        self._device.shell(["am", "broadcast", "-a", "ADB_CLEAR_TEXT"])
+        time.sleep(1)
+
     def drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration: float):
         self.logger.debug(
             f"drag({start_x}, {start_y}) → ({end_x}, {end_y}), {duration}s"
