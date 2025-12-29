@@ -52,6 +52,8 @@ class Device:
                 extra={"markup": True},
             )
 
+        self._original_ime: str | None = None  # Track original IME for restoration
+
         self._set_ime()
         self._is_recording = False
         self._video_recorder: VideoRecorder | None = None
@@ -110,6 +112,11 @@ class Device:
         ime = self._device.shell(["settings", "get", "secure", "default_input_method"])
         self.logger.debug(f"Current IME: {ime}")
 
+        # Save original IME before switching
+        if ime and ime.strip():
+            self._original_ime = ime.strip()
+            self.logger.debug(f"Saved original IME: {self._original_ime}")
+
         if ime != target_ime:
             try:
                 self._device.shell(["ime", "enable", target_ime])
@@ -122,6 +129,48 @@ class Device:
                     f"{TIMES} Failed to set IME: {e}", extra={"markup": True}
                 )
                 raise
+
+    def restore_ime(self) -> None:
+        """Restore the original IME that was active before ADB keyboard was set.
+
+        This method is idempotent - it can be called multiple times safely.
+        If restoration fails, an error is logged but no exception is raised.
+        """
+        # Check if we have an original IME to restore
+        if not self._original_ime:
+            self.logger.debug(
+                f"[dim]{WARNING} No original IME to restore[/]",
+                extra={"markup": True},
+            )
+            return
+
+        # Check current IME to avoid unnecessary changes
+        current_ime = self._device.shell([
+            "settings",
+            "get",
+            "secure",
+            "default_input_method",
+        ])
+
+        if current_ime == self._original_ime:
+            self.logger.debug(f"Original IME already active: {self._original_ime}")
+            return
+
+        # Attempt to restore the original IME
+        try:
+            self._device.shell(["ime", "set", self._original_ime])
+            self.logger.info(
+                f"{KEYBOARD} Restored original IME: {self._original_ime}",
+                extra={"markup": True},
+            )
+            # Mark as restored by clearing the saved value
+            self._original_ime = None
+        except Exception as e:
+            # Log but don't raise - this is cleanup code
+            self.logger.error(
+                f"[bold red]{TIMES} Failed to restore IME:[/] {e}",
+                extra={"markup": True},
+            )
 
     @overload
     def capture_screenshot(self, format: Literal["PIL"]) -> Image: ...
@@ -380,3 +429,37 @@ class Device:
     def recording_error(self) -> str | None:
         """Return the last recording error message, if any."""
         return self._video_recorder.error_message if self._video_recorder else None
+
+    def __del__(self) -> None:
+        """Destructor to restore original IME when Device object is destroyed."""
+        try:
+            if hasattr(self, "_original_ime") and self._original_ime:
+                self.restore_ime()
+        except Exception as e:
+            # Destructor should never raise - log if possible, otherwise fail silently
+            if hasattr(self, "logger"):
+                self.logger.error(
+                    f"[bold red]{TIMES} Error in Device destructor:[/] {e}",
+                    extra={"markup": True},
+                )
+
+    def __enter__(self):
+        """Context manager entry - returns the Device instance."""
+        return self
+
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
+        """Context manager exit - restores the original IME.
+
+        This method is guaranteed to be called even when exceptions occur,
+        including KeyboardInterrupt (Ctrl+C).
+
+        Args:
+            _exc_type: Exception type if an exception was raised (unused)
+            _exc_val: Exception value if an exception was raised (unused)
+            _exc_tb: Exception traceback if an exception was raised (unused)
+
+        Returns:
+            False to propagate any exceptions (don't suppress them)
+        """
+        self.restore_ime()
+        return False  # Don't suppress exceptions

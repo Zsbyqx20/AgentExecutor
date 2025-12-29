@@ -150,5 +150,29 @@ class Agent(ABC):
         """
         self.current_step = 0
 
+    def __enter__(self):
+        """Context manager entry - returns the Agent instance."""
+        return self
+
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
+        """Context manager exit - finalizes tracking and restores device IME.
+
+        This method is guaranteed to be called even when exceptions occur,
+        including KeyboardInterrupt (Ctrl+C).
+
+        Args:
+            _exc_type: Exception type if an exception was raised (unused)
+            _exc_val: Exception value if an exception was raised (unused)
+            _exc_tb: Exception traceback if an exception was raised (unused)
+
+        Returns:
+            False to propagate any exceptions (don't suppress them)
+        """
+        # Finalize tracking if enabled
+        self._finalize_tracking()
+        # Restore device IME
+        self.device.restore_ime()
+        return False  # Don't suppress exceptions
+
 
 __all__ = ["Action", "Language", "Agent"]
