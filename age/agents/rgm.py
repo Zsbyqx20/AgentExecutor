@@ -174,9 +174,7 @@ class RGMAgent(Agent):
             thought = f"Performing {action_type} action"
 
         # Extract action description from response if present
-        action_desc_match = re.search(
-            r"Action:\s*(.*)", response_text
-        )
+        action_desc_match = re.search(r"Action:\s*(.*)", response_text)
         if action_desc_match:
             action_description = action_desc_match.group(1).strip()
         else:

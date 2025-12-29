@@ -25,7 +25,7 @@ class APIClient:
         assert os.environ.get(api_key_name), (
             "You must provide an API key in your environment variables!"
         )
-        self._api_key = os.environ.get("API_KEY", "")
+        self._api_key = os.environ.get(api_key_name, "")
         self._headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
