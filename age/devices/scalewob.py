@@ -4,7 +4,7 @@ from typing import Literal, overload
 from PIL.Image import Image
 from scalewob.automation import ScaleWoBAutomation
 
-from age.icons import KEYBOARD, TIMES
+from age.icons import TIMES
 from age.logger import get_logger
 
 from .base import Device, Direction
@@ -22,25 +22,12 @@ class ScaleWoBDevice(Device):
         self._headless = headless
         self._platform = platform
         self._auto = ScaleWoBAutomation(env_id, headless, platform=platform)
+        self._auto.start()
+        self._auto.start_evaluation()
         self.logger.info(
             f"[cyan]ScaleWoB Device initialized:[/] env_id={env_id}, platform={platform}, headless={headless}",
             extra={"markup": True},
         )
-
-    def __enter__(self):
-        try:
-            self._auto.start()
-            self.logger.info(
-                f"{KEYBOARD} ScaleWoB automation started",
-                extra={"markup": True},
-            )
-            return self
-        except Exception as e:
-            self.logger.error(
-                f"[bold red]{TIMES} Failed to start ScaleWoB automation:[/] {e}",
-                extra={"markup": True},
-            )
-            raise
 
     def __exit__(self, _exc_type, _exc_val, _exc_tb):
         try:
@@ -78,15 +65,10 @@ class ScaleWoBDevice(Device):
             return 390 * 3, 844 * 3
         return 1280 * 3, 800 * 3
 
-    def _normalize_coordinates(self, x: int, y: int) -> tuple[int, int]:
-        return int(x * self.size[0] / 1000), int(y * self.size[1] / 1000)
-
     def press(self, x: int, y: int):
         self.logger.debug(f"press({x}, {y})")
         try:
-            x_norm, y_norm = self._normalize_coordinates(x, y)
-            self.logger.debug(f"Normalized to: ({x_norm}, {y_norm})")
-            self._auto.click(x_norm, y_norm)
+            self._auto.click(x, y)
             time.sleep(1)
         except Exception as e:
             self.logger.error(
@@ -98,9 +80,7 @@ class ScaleWoBDevice(Device):
     def long_press(self, x: int, y: int, duration: float):
         self.logger.debug(f"long_press({x}, {y}, {duration}s)")
         try:
-            x_norm, y_norm = self._normalize_coordinates(x, y)
-            self.logger.debug(f"Normalized to: ({x_norm}, {y_norm})")
-            self._auto.long_press(x_norm, y_norm, int(duration * 1000))
+            self._auto.long_press(x, y, int(duration * 1000))
             time.sleep(1)
         except Exception as e:
             self.logger.error(
@@ -137,12 +117,7 @@ class ScaleWoBDevice(Device):
     def drag(self, start_x: int, start_y: int, end_x: int, end_y: int):
         self.logger.debug(f"drag({start_x}, {start_y}) → ({end_x}, {end_y})")
         try:
-            start_x_norm, start_y_norm = self._normalize_coordinates(start_x, start_y)
-            end_x_norm, end_y_norm = self._normalize_coordinates(end_x, end_y)
-            self.logger.debug(
-                f"Normalized: ({start_x_norm}, {start_y_norm}) → ({end_x_norm}, {end_y_norm})"
-            )
-            self._auto.drag(start_x_norm, start_y_norm, end_x_norm, end_y_norm)
+            self._auto.drag(start_x, start_y, end_x, end_y)
             time.sleep(1)
         except Exception as e:
             self.logger.error(
@@ -154,9 +129,7 @@ class ScaleWoBDevice(Device):
     def scroll(self, start_x: int, start_y: int, direction: Direction, distance: int):
         self.logger.debug(f"scroll({start_x}, {start_y}, {direction}, {distance})")
         try:
-            start_x_norm, start_y_norm = self._normalize_coordinates(start_x, start_y)
-            self.logger.debug(f"Normalized start: ({start_x_norm}, {start_y_norm})")
-            self._auto.scroll(start_x_norm, start_y_norm, str(direction), distance)
+            self._auto.scroll(start_x, start_y, str(direction), distance)
             time.sleep(1)
         except Exception as e:
             self.logger.error(

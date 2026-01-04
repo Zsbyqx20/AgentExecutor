@@ -4,8 +4,6 @@ from enum import Enum
 from pathlib import Path
 from typing import TypedDict
 
-from age import AndroidDevice
-
 
 class Action(TypedDict):
     action_type: str
@@ -21,7 +19,6 @@ class Language(str, Enum):
 class Agent(ABC):
     def __init__(
         self,
-        device_id: str | None = None,
         enable_tracking: bool = False,
         tracking_output_dir: str | Path | None = None,
         # Tracking metadata (subclasses should provide these)
@@ -32,7 +29,6 @@ class Agent(ABC):
         max_steps: int | None = None,
     ) -> None:
         super().__init__()
-        self.device = AndroidDevice(device_id)
         self.tracker = None
         self._task_name = task_name
         self._model_name = model_name
@@ -170,8 +166,9 @@ class Agent(ABC):
         """
         # Finalize tracking if enabled
         self._finalize_tracking()
-        # Restore device IME
-        self.device.restore_ime()
+        # Restore device IME (only if device supports it)
+        if hasattr(self.device, "restore_ime"):
+            self.device.restore_ime()  # type: ignore[attr-defined]
         return False  # Don't suppress exceptions
 
 

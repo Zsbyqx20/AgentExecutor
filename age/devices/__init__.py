@@ -1,4 +1,5 @@
 from .android import AndroidDevice
 from .base import Device
+from .scalewob import ScaleWoBDevice
 
-__all__ = ["Device", "AndroidDevice"]
+__all__ = ["Device", "AndroidDevice", "ScaleWoBDevice"]

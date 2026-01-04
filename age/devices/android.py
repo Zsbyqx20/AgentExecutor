@@ -184,7 +184,7 @@ class AndroidDevice(Device):
         return result
 
     @property
-    def size(self):
+    def size(self) -> tuple[int, int]:
         return self._device.window_size()
 
     def press(self, x: int, y: int) -> None:

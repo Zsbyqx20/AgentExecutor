@@ -6,6 +6,7 @@ GUI automation tasks on Android devices.
 
 from .base import Action, Agent, Language
 from .doubao import DoubaoAgent
+from .doubao_scalewob import DoubaoScaleWoBAgent
 from .rgm import RGMAgent
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "Language",
     # Agent implementations
     "DoubaoAgent",
+    "DoubaoScaleWoBAgent",
     "RGMAgent",
 ]

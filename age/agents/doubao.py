@@ -3,6 +3,8 @@ import time
 from pathlib import Path
 from typing import Literal
 
+from age.devices import AndroidDevice
+
 from ..api import APIClient
 from ..icons import (
     CHECK,
@@ -79,9 +81,9 @@ class DoubaoAgent(Agent):
         tracking_output_dir: str | Path | None = None,
         max_steps: int | None = None,
     ) -> None:
+        self.device = AndroidDevice(device_id)
         # Initialize base class with tracking and step limiting parameters
         super().__init__(
-            device_id=device_id,
             enable_tracking=enable_tracking,
             tracking_output_dir=tracking_output_dir,
             task_name=task_name,
@@ -92,7 +94,7 @@ class DoubaoAgent(Agent):
         self.name = "Doubao"
         self.model_name = model_name
         self.task_name = task_name
-        self.window_size = self.device.size
+        self.window_size: tuple[int, int] = self.device.size
         self.language = Language[language.upper()]
         self.client = APIClient(prefix=self.name)
         self.history = []
@@ -327,7 +329,7 @@ class DoubaoAgent(Agent):
         elif action_type == "scroll":
             x, y = self._normalize_coordinates(*params["point"])
             direction = params["direction"]
-            distance = self.window_size.height // 2
+            distance = self.window_size[1] // 2
             self.logger.debug(f"Scroll direction: {direction}, distance: {distance}")
             self.device.scroll(x, y, Direction[direction.upper()], distance)
         elif action_type == "open_app":

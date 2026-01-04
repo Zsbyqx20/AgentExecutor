@@ -4,6 +4,8 @@ import time
 from pathlib import Path
 from typing import Literal, NotRequired, TypedDict
 
+from age.devices import AndroidDevice
+
 from ..api import APIClient
 from ..icons import (
     CHECK,
@@ -65,9 +67,9 @@ class RGMAgent(Agent):
         tracking_output_dir: str | Path | None = None,
         max_steps: int | None = None,
     ) -> None:
+        self.device = AndroidDevice(device_id)
         # Initialize base class with tracking and step limiting parameters
         super().__init__(
-            device_id=device_id,
             enable_tracking=enable_tracking,
             tracking_output_dir=tracking_output_dir,
             task_name=task_name,
