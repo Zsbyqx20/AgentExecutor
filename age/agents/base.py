@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TypedDict
 
-from ..device import Device
+from age import AndroidDevice
 
 
 class Action(TypedDict):
@@ -32,7 +32,7 @@ class Agent(ABC):
         max_steps: int | None = None,
     ) -> None:
         super().__init__()
-        self.device = Device(device_id)
+        self.device = AndroidDevice(device_id)
         self.tracker = None
         self._task_name = task_name
         self._model_name = model_name

@@ -2,27 +2,21 @@ import base64
 import re
 import time
 from difflib import get_close_matches
-from enum import Enum
 from io import BytesIO
 from typing import Literal, overload
 
 from adbutils import adb
 from PIL.Image import Image
 
-from .icons import KEYBOARD, PHONE, TIMES, VIDEO, WARNING
-from .logger import get_logger
-from .video_recorder import VideoRecorder
+from age.devices.base import Device, Direction
+from age.icons import KEYBOARD, PHONE, TIMES, VIDEO, WARNING
+from age.logger import get_logger
+from age.video_recorder import VideoRecorder
 
 
-class Direction(str, Enum):
-    LEFT = "left"
-    RIGHT = "right"
-    UP = "up"
-    DOWN = "down"
-
-
-class Device:
+class AndroidDevice(Device):
     def __init__(self, device_id: str | None = None) -> None:
+        super().__init__()
         self.logger = get_logger(__name__)
 
         available_devices = {str(s.serial): s for s in adb.device_list()}

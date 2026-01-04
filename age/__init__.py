@@ -1,6 +1,6 @@
 from .agents import Action, Agent, DoubaoAgent, Language, RGMAgent
 from .api import APIClient
-from .device import Device
+from .devices import AndroidDevice, Device
 from .logging_config import setup_logging
 
 # Initialize logging on package import
@@ -13,6 +13,7 @@ setup_logging(
 
 __all__ = [
     "Device",
+    "AndroidDevice",
     "APIClient",
     "Agent",
     "DoubaoAgent",

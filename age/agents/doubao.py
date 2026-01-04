@@ -279,7 +279,7 @@ class DoubaoAgent(Agent):
         Returns:
             Execution time in seconds
         """
-        from ..device import Direction
+        from age.devices.android import Direction
 
         start_time = time.perf_counter()
 
