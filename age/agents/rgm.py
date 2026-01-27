@@ -1,3 +1,4 @@
+import ast
 import json
 import re
 import time
@@ -150,13 +151,11 @@ class RGMAgent(Agent):
         )
         if json_match:
             json_str = json_match.group(0)
-            if '"action": "type"' in json_str:
-                json_str = json_str.replace('")"}}', '"}}')
         else:
             raise ValueError(f"Cannot parse action from response: {response_text}")
 
         try:
-            function_call = json.loads(json_str)
+            function_call = ast.literal_eval(json_str)
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in response: {json_str}") from e
 

@@ -55,10 +55,10 @@ class Agent(ABC):
             language=self._language,
             output_dir=output_dir or Path("tracks"),
             logger=logger,
-            screen_size=self.device.size,
+            screen_size=self.device.size,  # type: ignore
             touch_range=(32767, 32767),
         )
-        self.tracker.start_video_recording(self.device)
+        self.tracker.start_video_recording(self.device)  # type: ignore
 
     def _record_action(
         self, action: Action, screenshot_b64: str, duration: float
@@ -88,7 +88,7 @@ class Agent(ABC):
             None otherwise.
         """
         if self.tracker:
-            self.tracker.stop_video_recording(self.device)
+            self.tracker.stop_video_recording(self.device)  # type: ignore
             trace_path, json_path = self.tracker.finalize()
             return trace_path, json_path
         return None
@@ -148,6 +148,9 @@ class Agent(ABC):
 
     def __enter__(self):
         """Context manager entry - returns the Agent instance."""
+        # Let the device manage its own lifecycle.
+        if hasattr(self, "device"):
+            self.device.__enter__()  # type: ignore[attr-defined]
         return self
 
     def __exit__(self, _exc_type, _exc_val, _exc_tb):
@@ -164,11 +167,12 @@ class Agent(ABC):
         Returns:
             False to propagate any exceptions (don't suppress them)
         """
-        # Finalize tracking if enabled
-        self._finalize_tracking()
-        # Restore device IME (only if device supports it)
-        if hasattr(self.device, "restore_ime"):
-            self.device.restore_ime()  # type: ignore[attr-defined]
+        try:
+            # Finalize tracking if enabled
+            self._finalize_tracking()
+        finally:
+            if hasattr(self, "device"):
+                self.device.__exit__(_exc_type, _exc_val, _exc_tb)  # type: ignore[attr-defined]
         return False  # Don't suppress exceptions
 
 

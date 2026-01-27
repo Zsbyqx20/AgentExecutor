@@ -48,7 +48,6 @@ class AndroidDevice(Device):
 
         self._original_ime: str | None = None  # Track original IME for restoration
 
-        self._set_ime()
         self._is_recording = False
         self._video_recorder: VideoRecorder | None = None
 
@@ -106,8 +105,13 @@ class AndroidDevice(Device):
         ime = self._device.shell(["settings", "get", "secure", "default_input_method"])
         self.logger.debug(f"Current IME: {ime}")
 
-        # Save original IME before switching
-        if ime and ime.strip():
+        # Save original IME before switching (only if different from target)
+        if (
+            ime
+            and ime.strip()
+            and ime.strip() != target_ime
+            and self._original_ime is None
+        ):
             self._original_ime = ime.strip()
             self.logger.debug(f"Saved original IME: {self._original_ime}")
 
@@ -439,6 +443,7 @@ class AndroidDevice(Device):
 
     def __enter__(self):
         """Context manager entry - returns the Device instance."""
+        self._set_ime()
         return self
 
     def __exit__(self, _exc_type, _exc_val, _exc_tb):

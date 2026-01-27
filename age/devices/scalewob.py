@@ -129,7 +129,7 @@ class ScaleWoBDevice(Device):
     def scroll(self, start_x: int, start_y: int, direction: Direction, distance: int):
         self.logger.debug(f"scroll({start_x}, {start_y}, {direction}, {distance})")
         try:
-            self._auto.scroll(start_x, start_y, str(direction), distance)
+            self._auto.scroll(start_x, start_y, direction.value, distance)
             time.sleep(1)
         except Exception as e:
             self.logger.error(

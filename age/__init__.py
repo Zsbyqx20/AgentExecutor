@@ -4,6 +4,7 @@ from .agents import (
     DoubaoAgent,
     DoubaoScaleWoBAgent,
     Language,
+    MAIAgent,
     RGMAgent,
 )
 from .api import APIClient
@@ -24,6 +25,7 @@ __all__ = [
     "APIClient",
     "Agent",
     "DoubaoAgent",
+    "MAIAgent",
     "DoubaoScaleWoBAgent",
     "RGMAgent",
     "Action",
