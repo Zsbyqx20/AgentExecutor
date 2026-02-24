@@ -1,7 +1,8 @@
+import ast
 import re
 import time
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Any
 
 from age.devices import ScaleWoBDevice
 
@@ -34,11 +35,11 @@ Action: ...
 
 _BASE_ACTIONS = """click(point='<point>x1 y1</point>')
 long_press(point='<point>x1 y1</point>')
-type(content='') #If you want to submit your input, use "\\n" at the end of `content`.
+type(content='') # If you want to submit your input, use "\\n" at the end of `content`.
 clear_text() # Clear all text in the currently activated textbox
 scroll(point='<point>x1 y1</point>', direction='down or up or right or left')
 drag(start_point='<point>x1 y1</point>', end_point='<point>x2 y2</point>')
-press_back()
+press_enter() # If you need to confirm the search
 wait(seconds=1) # Wait for 1 second before next action (useful for loading screens)
 """
 
@@ -51,7 +52,8 @@ _FINISHED_ACTION = """finished(content='xxx') # Use escape characters \\', \\", 
 
 ## Note
 - Use {language} in `Thought` part.
-- Write a small plan and finally summarize your next action (with its target element) in one sentence in `Thought` part.
+- Write a small plan and finally summarize your next action (with its target element) in one sentence (no more than 50 words) in `Thought` part.
+- You are operating on a simulator which will not trigger actual payments. Please always finish the payment process unless the task disallows you to do so.
 """
 
 _NOTEPAD_SECTION = """
@@ -72,6 +74,8 @@ class DoubaoScaleWoBAgent(Agent):
         model_name: str,
         task_name: str,
         env_id: str,  # Required for ScaleWoB
+        task_id: int, 
+        task_params: dict[str, Any] | None = None,
         language: Literal["CN", "EN"] = "CN",
         headless: bool = False,
         platform: Literal["mobile", "desktop"] = "desktop",
@@ -89,10 +93,14 @@ class DoubaoScaleWoBAgent(Agent):
             model_name=model_name,
             language=Language[language.upper()].value,
             max_steps=max_steps,
+            env_id=f"Env: {env_id}. Task: {task_id}",
+            description=task_name,
         )
         self.name = "Doubao"
         self.model_name = model_name
         self.task_name = task_name
+        self.task_id = task_id
+        self.task_params = task_params
         self.window_size = self.device.size
         self.language = Language[language.upper()]
         self.client = APIClient(prefix=self.name)
@@ -100,6 +108,7 @@ class DoubaoScaleWoBAgent(Agent):
         self.logger = get_logger(__name__)
         self.enable_notepad = enable_notepad
         self.notes: list[str] = []
+        self.task_status: bool = False
 
     def reset(self, **kwargs) -> None:
         super().reset(**kwargs)  # Reset step counter
@@ -146,7 +155,17 @@ class DoubaoScaleWoBAgent(Agent):
         prompt += _USER_INSTRUCTION.format(instruction=self.task_name)
 
         # Format language placeholder
-        return prompt.format(language=self.language.value)
+        res = prompt.format(language=self.language.value)
+
+        # Add json schema if needed
+        if self.task_params:
+            res += f"""
+## Answer Format
+### Hint: This task requires you to provide your answer with JSON content. The JSON schema required is as follows.
+Please make sure you provide correct JSON format when calling `finished(content={...})`.
+{self.task_params}
+"""
+        return res
 
     def _parse_action(self, response_text: str) -> Action:
         thought_match = re.search(
@@ -226,8 +245,8 @@ class DoubaoScaleWoBAgent(Agent):
                         int(end_match.group(1)),
                         int(end_match.group(2)),
                     )
-            elif action_text == "press_back()":
-                action_type = "press_back"
+            elif action_text == "press_enter()":
+                action_type = "press_enter"
             elif action_text == "clear_text()":
                 action_type = "clear_text"
             elif action_text.startswith("wait("):
@@ -263,7 +282,7 @@ class DoubaoScaleWoBAgent(Agent):
 
         return Action(action_type=action_type, params=params, thought=thought)
 
-    def _execute(self, action: Action) -> float:
+    def _execute(self, action: Action) -> tuple[float, bool]:
         """Execute action and return duration.
 
         Returns:
@@ -284,7 +303,7 @@ class DoubaoScaleWoBAgent(Agent):
             "clear_text": "bold red",
             "scroll": "yellow",
             "drag": "purple",
-            "press_back": "magenta",
+            "press_enter": "magenta",
             "wait": "dim",
             "finished": "bold green",
             "note_create": "bold cyan",
@@ -292,6 +311,7 @@ class DoubaoScaleWoBAgent(Agent):
             "note_remove": "bold red",
         }
         color = action_colors.get(action_type, "white")
+        status = True
 
         self.logger.info(
             f"[{color}]{GEAR} {action_type}[/]\n",
@@ -324,8 +344,8 @@ class DoubaoScaleWoBAgent(Agent):
             end_x, end_y = self._normalize_coordinates(*params["end_point"])
             self.logger.debug(f"Drag: ({start_x}, {start_y}) → ({end_x}, {end_y})")
             self.device.drag(start_x, start_y, end_x, end_y)  # type: ignore[arg-type]
-        elif action_type == "press_back":
-            self.device.navigate_back()
+        elif action_type == "press_enter":
+            self.device.press_enter()
         elif action_type == "clear_text":
             self.logger.info(
                 f"[bold red]{ERASER} Clearing text input[/]",
@@ -338,9 +358,18 @@ class DoubaoScaleWoBAgent(Agent):
             time.sleep(seconds)
             self.logger.debug("Wait complete")
         elif action_type == "finished":
+            if self.task_params:
+                try:
+                    result = self.device.eval(self.task_id, ast.literal_eval(params['content']))
+                except Exception as e:
+                    self.logger.error(f"Error when evaluation: {e}")
+                    result = False
+            else:
+                result = self.device.eval(self.task_id, params=None)
+            status = result
             self.logger.info(
-                "\n[bold green]{} Task Completed[/]\n[italic dim]{}[/]\n".format(
-                    TROPHY, params["content"]
+                "\n[bold green]{} Task Completed. Success: {}[/]\n[italic dim]{}[/]\n".format(
+                    TROPHY, status, params["content"]
                 ),
                 extra={"markup": True},
             )
@@ -402,7 +431,16 @@ class DoubaoScaleWoBAgent(Agent):
             raise ValueError(f"Unknown action type: {action}")
 
         end_time = time.perf_counter()
-        return end_time - start_time
+        return end_time - start_time, status
+
+    def execute(self, action: Action) -> tuple[float, bool]:
+        try:
+            duration, status = self._execute(action)
+        except Exception as e:
+            self.logger.error(f"Error in executing action {action}: {e}")
+            duration = -1
+            status = False
+        return duration, status
 
     def _compress_history(self):
         if not self.history:
@@ -451,16 +489,17 @@ class DoubaoScaleWoBAgent(Agent):
                 extra={"markup": True},
             )
             # Execute the forced finished action (for tracking and logging)
-            duration = self._execute(forced_action)
+            duration, status = self.execute(forced_action)
             # Record action for tracking if enabled
             if self.tracker:
                 screenshot = self.device.capture_screenshot("B64")
                 self._record_action(forced_action, screenshot, duration)
                 # Finalize tracking
-                result = self._finalize_tracking()
+                result = self._finalize_tracking(result=status)
                 if result:
                     trace_path, json_path = result
                     self.logger.debug(f"Generated {trace_path} and {json_path}")
+                self.task_status = False
             return forced_action
 
         self.logger.debug("Capturing screenshot...")
@@ -504,7 +543,7 @@ class DoubaoScaleWoBAgent(Agent):
         self.logger.debug(f"Response length: {len(response.response)} chars")
 
         action = self._parse_action(response.response)
-        duration = self._execute(action)
+        duration, status = self.execute(action)
 
         # Record action for tracking
         if self.tracker:
@@ -512,7 +551,8 @@ class DoubaoScaleWoBAgent(Agent):
 
             # Finalize tracking on finished action
             if action["action_type"] == "finished":
-                result = self._finalize_tracking()
+                self.task_status = status
+                result = self._finalize_tracking(result=status)
                 if result:
                     trace_path, json_path = result
                     self.logger.debug(f"Generated {trace_path} and {json_path}")

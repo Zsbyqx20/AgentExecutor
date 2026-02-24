@@ -49,6 +49,7 @@ class ActionTracker:
         logger: logging.Logger,
         screen_size: tuple[int, int],
         touch_range: tuple[int, int] = (32767, 32767),
+        **kwargs,
     ) -> None:
         """Initialize the action tracker.
 
@@ -66,6 +67,7 @@ class ActionTracker:
         self.language = language
         self.output_dir = Path(output_dir)
         self.logger = logger
+        self.additional_metadata = kwargs
 
         # Create task directory with 8-digit hash
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -128,6 +130,10 @@ class ActionTracker:
                 self.screenshots_dir / f"step_{step_num:03d}_{action_type}.png"
             )
             annotated.save(screenshot_path)
+            raw_screenshot_path = (
+                self.screenshots_dir / f"step_{step_num:03d}_{action_type}_raw.png"
+            )
+            screenshot.save(raw_screenshot_path)
 
             # Store action metadata
             self.actions.append({
@@ -149,7 +155,7 @@ class ActionTracker:
             )
             # Don't raise - allow agent to continue
 
-    def finalize(self) -> tuple[Path, Path]:
+    def finalize(self, **kwargs) -> tuple[Path, Path]:
         """Generate markdown trace and JSON log.
 
         Returns:
@@ -157,7 +163,7 @@ class ActionTracker:
         """
         try:
             # Generate markdown
-            markdown = self._generate_markdown()
+            markdown = self._generate_markdown(**kwargs)
             trace_path = self.task_dir / "trace.md"
             trace_path.write_text(markdown, encoding="utf-8")
 
@@ -280,13 +286,13 @@ class ActionTracker:
         try:
             # Try to load Noto Sans SC Bold (common on Linux systems)
             self.font = ImageFont.truetype(
-                "/Users/zachary/Library/Fonts/NotoSansSC-Bold.ttf", 28
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 28
             )
             self.font_small = ImageFont.truetype(
-                "/Users/zachary/Library/Fonts/NotoSansSC-Bold.ttf", 24
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 24
             )
             self.font_large = ImageFont.truetype(
-                "/Users/zachary/Library/Fonts/NotoSansSC-Bold.ttf", 36
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc", 36
             )
         except OSError:
             # Fallback to default font with specified sizes
@@ -649,12 +655,13 @@ class ActionTracker:
         else:
             return "down" if dy > 0 else "up"
 
-    def _generate_markdown(self) -> str:
+    def _generate_markdown(self, **kwargs) -> str:
         """Generate markdown execution trace.
 
         Returns:
             Complete markdown document as string
         """
+        self.additional_metadata.update(kwargs)
         lines = [
             f"# Task Execution Trace: {self.task_name}",
             "",
@@ -662,6 +669,7 @@ class ActionTracker:
             f"**Model**: {self.model_name}",
             f"**Language**: {self.language}",
             f"**Total Steps**: {len(self.actions)}",
+            *[f"**{k}**: {v}" for k, v in self.additional_metadata.items()],
             "",
             "---",
             "",

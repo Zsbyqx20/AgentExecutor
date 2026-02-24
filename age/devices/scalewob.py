@@ -137,6 +137,18 @@ class ScaleWoBDevice(Device):
                 extra={"markup": True},
             )
             raise
+    
+    def press_enter(self):
+        self.logger.debug("press_enter()")
+        try:
+            self._auto.press_enter()
+            time.sleep(1)
+        except Exception as e:
+            self.logger.error(
+                f"[bold red]{TIMES} navigate_back failed:[/] {e}",
+                extra={"markup": True}, 
+            )
+            raise
 
     def navigate_back(self):
         self.logger.debug("navigate_back()")
@@ -179,3 +191,6 @@ class ScaleWoBDevice(Device):
             Error message indicating video recording is not supported
         """
         return "Video recording not supported on ScaleWoB device"
+
+    def eval(self, task_id, params):
+        return self._auto.finish_evaluation(task_id, params=params).get('success', False) is True

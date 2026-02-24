@@ -27,6 +27,7 @@ class Agent(ABC):
         language: str = "Chinese",
         # Step limiting to prevent infinite loops
         max_steps: int | None = None,
+        **kwargs,
     ) -> None:
         super().__init__()
         self.tracker = None
@@ -37,9 +38,9 @@ class Agent(ABC):
         self.current_step = 0
 
         if enable_tracking:
-            self._init_tracker(tracking_output_dir)
+            self._init_tracker(tracking_output_dir, **kwargs)
 
-    def _init_tracker(self, output_dir: str | Path | None = None) -> None:
+    def _init_tracker(self, output_dir: str | Path | None = None, **kwargs) -> None:
         """Initialize the action tracking system.
 
         This method sets up the ActionTracker for recording agent actions
@@ -57,6 +58,7 @@ class Agent(ABC):
             logger=logger,
             screen_size=self.device.size,  # type: ignore
             touch_range=(32767, 32767),
+            **kwargs
         )
         self.tracker.start_video_recording(self.device)  # type: ignore
 
@@ -78,7 +80,7 @@ class Agent(ABC):
                 duration=duration,
             )
 
-    def _finalize_tracking(self) -> tuple[Path, Path] | None:
+    def _finalize_tracking(self, **kwargs) -> tuple[Path, Path] | None:
         """Finalize tracking and generate the execution trace.
 
         Stops video recording and generates markdown trace and JSON log files.
@@ -89,7 +91,7 @@ class Agent(ABC):
         """
         if self.tracker:
             self.tracker.stop_video_recording(self.device)  # type: ignore
-            trace_path, json_path = self.tracker.finalize()
+            trace_path, json_path = self.tracker.finalize(**kwargs)
             return trace_path, json_path
         return None
 
