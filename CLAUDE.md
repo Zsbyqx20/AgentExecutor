@@ -105,7 +105,7 @@ The `ActionTracker` class provides automatic action execution tracing with annot
 - Records each action with timestamp, parameters, and LLM thought
 - Annotates screenshots with visual markers showing where actions occurred
 - Records video of entire task execution
-- Generates markdown execution trace documents
+- Generates markdown and JSON execution traces
 
 **Usage:**
 ```python
@@ -132,10 +132,14 @@ while True:
 tracks/
 └── task_20241224_201530_open_settings/
     ├── trace.md              # Markdown execution trace with video section
+    ├── actions.json          # Backward-compatible normalized action events
+    ├── trace.json            # Rich machine-readable trace (thoughts + artifacts)
     ├── recording.mp4         # Video of entire task execution
     └── screenshots/
         ├── step_001_open_app.png
+        ├── step_001_open_app_raw.png
         ├── step_002_click.png
+        ├── step_002_click_raw.png
         └── ...
 ```
 

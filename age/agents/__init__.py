@@ -8,6 +8,7 @@ from .base import Action, Agent, Language
 from .doubao import DoubaoAgent
 from .doubao_scalewob import DoubaoScaleWoBAgent
 from .mai import MAIAgent
+from .open_autoglm_scalewob import OpenAutoGLMScaleWoBAgent
 from .rgm import RGMAgent
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     # Agent implementations
     "DoubaoAgent",
     "DoubaoScaleWoBAgent",
+    "OpenAutoGLMScaleWoBAgent",
     "MAIAgent",
     "RGMAgent",
 ]

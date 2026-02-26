@@ -76,7 +76,7 @@ class APIClient:
         self,
         model: str,
         messages: list,
-        timeout: int = 120,
+        timeout: int = 600,
         max_retries: int = 3,
         logger: logging.Logger | None = None,
         **kwargs,

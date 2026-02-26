@@ -54,6 +54,7 @@ _FINISHED_ACTION = """finished(content='xxx') # Use escape characters \\', \\", 
 - Use {language} in `Thought` part.
 - Write a small plan and finally summarize your next action (with its target element) in one sentence (no more than 50 words) in `Thought` part.
 - You are operating on a simulator which will not trigger actual payments. Please always finish the payment process unless the task disallows you to do so.
+- Always login the app without explicit prohibition. Login with random email or phone number will be fine. The verification code and password can be random without explicit statements.
 """
 
 _NOTEPAD_SECTION = """
@@ -509,18 +510,31 @@ Please make sure you provide correct JSON format when calling `finished(content=
         # Store screenshot for tracking (reused from LLM capture)
         screenshot_for_tracker = screenshot
 
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/png;base64,{screenshot}"},
-                    },
-                ],
-            }
-        ]
+        if self.history:
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{screenshot}"},
+                        },
+                    ],
+                }
+            ]
+        else:
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{screenshot}"},
+                        },
+                    ],
+                }
+            ]
 
         self.logger.debug(
             f"[bold blue]{MAGIC} Requesting LLM prediction[/] ({self.model_name})",

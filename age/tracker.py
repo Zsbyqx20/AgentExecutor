@@ -2,12 +2,13 @@
 
 This module provides the ActionTracker class which records agent actions,
 annotates screenshots with action visualizations, and generates markdown
-execution trace documents.
+and JSON execution trace documents.
 """
 
 import base64
 import hashlib
 import io
+import json
 import logging
 from datetime import datetime
 from enum import Enum
@@ -29,15 +30,15 @@ class MarkerColor(str, Enum):
     DRAG = "#800080"  # purple
     SYSTEM = "#00FFFF"  # cyan
     WAIT = "#808080"  # gray
-    NOTEPAD = "#00FFFF"  # cyan
-    FINISHED = "#00FF00"  # green
+    NOTEPAD = "#00FFFF"  # cyan  # noqa: PIE796
+    FINISHED = "#00FF00"  # green  # noqa: PIE796
 
 
 class ActionTracker:
     """Tracks agent actions and generates annotated execution traces.
 
     This class captures screenshots, annotates them with action visualizations,
-    and generates markdown documents showing the complete execution trace.
+    and generates markdown/JSON documents showing the complete execution trace.
     """
 
     def __init__(
@@ -70,7 +71,7 @@ class ActionTracker:
         self.additional_metadata = kwargs
 
         # Create task directory with 8-digit hash
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005
         hash_code = self._generate_hash(task_name)
         self.task_dir = self.output_dir / f"task_{timestamp}_{hash_code}"
         self.task_dir.mkdir(parents=True, exist_ok=True)
@@ -93,7 +94,7 @@ class ActionTracker:
         # Device info for JSON output
         self.screen_size = {"width": screen_size[0], "height": screen_size[1]}
         self.touch_range = {"x_max": touch_range[0], "y_max": touch_range[1]}
-        self.session_start = datetime.now()
+        self.session_start = datetime.now()  # noqa: DTZ005
 
         self.logger.info(
             f"[cyan]{FOLDER} Tracking directory:[/] {self.task_dir}",
@@ -141,6 +142,7 @@ class ActionTracker:
                 "timestamp": timestamp,
                 "action": {**action, "duration": duration},
                 "screenshot_path": screenshot_path.name,
+                "raw_screenshot_path": raw_screenshot_path.name,
             })
 
             self.logger.debug(
@@ -148,7 +150,7 @@ class ActionTracker:
                 extra={"markup": True},
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error(
                 f"[bold red]{TIMES} Tracking failed for action {action['action_type']}:[/] {e}",
                 extra={"markup": True},
@@ -156,31 +158,39 @@ class ActionTracker:
             # Don't raise - allow agent to continue
 
     def finalize(self, **kwargs) -> tuple[Path, Path]:
-        """Generate markdown trace and JSON log.
+        """Generate markdown trace and JSON logs.
 
         Returns:
-            Tuple of (trace_path, json_path) to generated files
+            Tuple of (trace_path, actions_json_path) to generated files
         """
         try:
+            self.additional_metadata.update(kwargs)
+
             # Generate markdown
-            markdown = self._generate_markdown(**kwargs)
+            markdown = self._generate_markdown()
             trace_path = self.task_dir / "trace.md"
             trace_path.write_text(markdown, encoding="utf-8")
 
-            # Generate JSON
+            # Generate compact actions JSON (backward-compatible format)
             json_data = self._generate_actions_json()
             json_path = self.task_dir / "actions.json"
             json_path.write_text(json_data, encoding="utf-8")
 
+            # Generate rich trace JSON for machine parsing
+            trace_json_data = self._generate_trace_json()
+            trace_json_path = self.task_dir / "trace.json"
+            trace_json_path.write_text(trace_json_data, encoding="utf-8")
+
             self.logger.info(
                 f"[cyan]{FILE} Trace saved to:[/] {trace_path}\n"
-                f"[cyan]{FILE} Actions JSON saved to:[/] {json_path}",
+                f"[cyan]{FILE} Actions JSON saved to:[/] {json_path}\n"
+                f"[cyan]{FILE} Rich trace JSON saved to:[/] {trace_json_path}",
                 extra={"markup": True},
             )
 
-            return trace_path, json_path
+            return trace_path, json_path  # noqa: TRY300
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error(
                 f"[bold red]{TIMES} Failed to generate trace/JSON:[/] {e}",
                 extra={"markup": True},
@@ -200,13 +210,13 @@ class ActionTracker:
         try:
             device.start_recording(str(self.video_path))
             self.video_enabled = True
-            self.video_start_timestamp = datetime.now()
+            self.video_start_timestamp = datetime.now()  # noqa: DTZ005
             self.logger.info(
                 f"[cyan]{VIDEO} Video recording started:[/] {self.video_path}",
                 extra={"markup": True},
             )
-            return True
-        except Exception as e:
+            return True  # noqa: TRY300
+        except Exception as e:  # noqa: BLE001
             self.logger.error(
                 f"[bold red]{TIMES} Failed to start video recording:[/] {e}",
                 extra={"markup": True},
@@ -232,9 +242,9 @@ class ActionTracker:
                 extra={"markup": True},
             )
             self.video_enabled = False
-            return True
+            return True  # noqa: TRY300
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error(
                 f"[bold red]{TIMES} Failed to stop video recording:[/] {e}",
                 extra={"markup": True},
@@ -655,17 +665,16 @@ class ActionTracker:
         else:
             return "down" if dy > 0 else "up"
 
-    def _generate_markdown(self, **kwargs) -> str:
+    def _generate_markdown(self) -> str:
         """Generate markdown execution trace.
 
         Returns:
             Complete markdown document as string
         """
-        self.additional_metadata.update(kwargs)
         lines = [
             f"# Task Execution Trace: {self.task_name}",
             "",
-            f"**Generated**: {datetime.now().isoformat()}",
+            f"**Generated**: {datetime.now().isoformat()}",  # noqa: DTZ005
             f"**Model**: {self.model_name}",
             f"**Language**: {self.language}",
             f"**Total Steps**: {len(self.actions)}",
@@ -897,9 +906,7 @@ class ActionTracker:
         Returns:
             Complete JSON document as string
         """
-        import json
-
-        session_end = datetime.now()
+        session_end = datetime.now()  # noqa: DTZ005
 
         # Convert actions to JSON format
         json_actions = []
@@ -922,6 +929,67 @@ class ActionTracker:
                 else None
             ),
             "actions": json_actions,
+        }
+
+        return json.dumps(output, indent=2, ensure_ascii=False)
+
+    def _generate_trace_json(self) -> str:
+        """Generate rich machine-readable JSON trace with per-step details.
+
+        Returns:
+            Complete JSON document as string
+        """
+        session_end = datetime.now()  # noqa: DTZ005
+
+        steps: list[dict] = []
+        normalized_actions: list[dict] = []
+        for action_data in self.actions:
+            action = action_data["action"]
+            timestamp = action_data["timestamp"]
+            relative_time = (timestamp - self.session_start).total_seconds()
+            steps.append({
+                "step": action_data["step"],
+                "timestamp": timestamp.isoformat(),
+                "relative_time": round(relative_time, 3),
+                "action_type": action["action_type"],
+                "params": action["params"],
+                "thought": action.get("thought", ""),
+                "duration": round(action.get("duration", 0.0), 3),
+                "artifacts": {
+                    "annotated_screenshot": f"screenshots/{action_data['screenshot_path']}",
+                    "raw_screenshot": f"screenshots/{action_data['raw_screenshot_path']}",
+                },
+            })
+
+            normalized_action = self._convert_action_to_json(action_data)
+            if normalized_action:
+                normalized_actions.append(normalized_action)
+
+        output = {
+            "schema_version": "1.0",
+            "task": {
+                "task_name": self.task_name,
+                "model_name": self.model_name,
+                "language": self.language,
+                "generated_at": session_end.isoformat(),
+                "additional_metadata": self.additional_metadata,
+            },
+            "device_info": {
+                "screen_size": self.screen_size,
+                "touch_range": self.touch_range,
+            },
+            "session": {
+                "start": self.session_start.isoformat(),
+                "end": session_end.isoformat(),
+                "video_recording_start": (
+                    self.video_start_timestamp.isoformat()
+                    if self.video_start_timestamp
+                    else None
+                ),
+                "video_path": "recording.mp4" if self.video_path.exists() else None,
+            },
+            "steps": steps,
+            "normalized_actions": normalized_actions,
         }
 
         return json.dumps(output, indent=2, ensure_ascii=False)

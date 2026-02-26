@@ -11,18 +11,19 @@ dependencies = [
     "jinja2>=3.1.6",
     "python-dotenv>=1.2.1",
     "requests>=2.32.5",
-    "rich>=14.3.1",
-    "scalewob>=0.10.0",
+    "rich>=14.3.3",
+    "scalewob>=0.12.1",
 ]
 
 [dependency-groups]
 dev = [
-    "ipykernel>=7.1.0",
-    "openai>=2.15.0",
-    "pandas>=3.0.0",
-    "poethepoet>=0.40.0",
+    "ipykernel>=7.2.0",
+    "openai>=2.24.0",
+    "pandas>=3.0.1",
+    "poethepoet>=0.42.0",
+    "pyarrow>=23.0.1",
     "pyright>=1.1.408",
-    "ruff>=0.14.14",
+    "ruff>=0.15.2",
 ]
 
 [tool.poe.tasks]
