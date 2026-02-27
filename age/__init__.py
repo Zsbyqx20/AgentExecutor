@@ -5,6 +5,7 @@ from .agents import (
     DoubaoScaleWoBAgent,
     Language,
     MAIAgent,
+    MobileAgent35ScaleWoBAgent,
     OpenAutoGLMScaleWoBAgent,
     RGMAgent,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "DoubaoAgent",
     "MAIAgent",
     "DoubaoScaleWoBAgent",
+    "MobileAgent35ScaleWoBAgent",
     "OpenAutoGLMScaleWoBAgent",
     "RGMAgent",
     "Action",

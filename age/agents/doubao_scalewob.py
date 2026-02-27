@@ -2,7 +2,7 @@ import ast
 import re
 import time
 from pathlib import Path
-from typing import Literal, Any
+from typing import Any, Literal
 
 from age.devices import ScaleWoBDevice
 
@@ -182,9 +182,7 @@ Please make sure you provide correct JSON format when calling `finished(content=
         # Log thought if present
         if thought:
             self.logger.info(
-                "\n[bold cyan]{} Thought[/]\n[italic dim]{}[/]\n".format(
-                    THOUGHT, thought
-                ),
+                f"\n[bold cyan]{THOUGHT} Thought[/]\n[italic dim]{thought}[/]\n",
                 extra={"markup": True},
             )
 
@@ -546,7 +544,7 @@ Please make sure you provide correct JSON format when calling `finished(content=
             self.model_name,
             self._compress_history() + messages,
             logger=self.logger,
-            thinking={"type": "disabled"},
+            # thinking={"type": "disabled"},
         )
         elapsed = time.time() - start_time
 
