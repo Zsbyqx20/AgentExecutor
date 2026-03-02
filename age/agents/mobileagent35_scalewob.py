@@ -74,6 +74,7 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
         tracking_output_dir: str | Path | None = None,
         max_steps: int | None = None,
         history_n: int = 4,
+        use_vertex_api: bool = False,
     ) -> None:
         super().__init__(
             model_name=model_name,
@@ -88,9 +89,10 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
             enable_tracking=enable_tracking,
             tracking_output_dir=tracking_output_dir,
             max_steps=max_steps,
+            use_vertex_api=use_vertex_api,
         )
         self.name = "MOBILE35"
-        self.client = APIClient(prefix=self.name)
+        self.client = APIClient(prefix=self.name, use_vertex_api=use_vertex_api)
         self.history: list[dict[str, str]] = []
         self.history_n = history_n
         self.logger = get_logger(__name__)

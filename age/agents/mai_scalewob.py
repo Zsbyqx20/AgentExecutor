@@ -63,6 +63,7 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
         tracking_output_dir: str | Path | None = None,
         max_steps: int | None = None,
         history_n: int = 3,
+        use_vertex_api: bool = False,
     ) -> None:
         super().__init__(
             model_name=model_name,
@@ -77,9 +78,10 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
             enable_tracking=enable_tracking,
             tracking_output_dir=tracking_output_dir,
             max_steps=max_steps,
+            use_vertex_api=use_vertex_api,
         )
         self.name = "MAI"
-        self.client = APIClient(prefix=self.name)
+        self.client = APIClient(prefix=self.name, use_vertex_api=use_vertex_api)
         self.history_n = history_n
         self.history_steps: list[dict[str, str]] = []
         self.logger = get_logger(__name__)

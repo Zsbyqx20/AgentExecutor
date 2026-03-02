@@ -41,6 +41,7 @@ class OpenAutoGLMScaleWoBAgent(DoubaoScaleWoBAgent):
         enable_tracking: bool = False,
         tracking_output_dir: str | Path | None = None,
         max_steps: int | None = None,
+        use_vertex_api: bool = False,
     ) -> None:
         super().__init__(
             model_name=model_name,
@@ -55,6 +56,7 @@ class OpenAutoGLMScaleWoBAgent(DoubaoScaleWoBAgent):
             enable_tracking=enable_tracking,
             tracking_output_dir=tracking_output_dir,
             max_steps=max_steps,
+            use_vertex_api=use_vertex_api,
         )
         self._consecutive_parse_failures = 0
         self._max_parse_failures = 2

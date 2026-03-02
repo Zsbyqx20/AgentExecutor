@@ -153,6 +153,7 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
         max_steps: int | None = None,
         history_n_images: int = 3,
         scale_factor: int | tuple[int, int] = 1000,
+        use_vertex_api: bool = False,
     ) -> None:
         super().__init__(
             model_name=model_name,
@@ -167,9 +168,10 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
             enable_tracking=enable_tracking,
             tracking_output_dir=tracking_output_dir,
             max_steps=max_steps,
+            use_vertex_api=use_vertex_api,
         )
         self.name = "GENERAL"
-        self.client = APIClient(prefix=self.name)
+        self.client = APIClient(prefix=self.name, use_vertex_api=use_vertex_api)
         self.logger = get_logger(__name__)
         self.history_n_images = history_n_images
         self.scale_factor = scale_factor

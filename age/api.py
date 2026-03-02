@@ -4,6 +4,7 @@ from typing import NamedTuple
 
 import requests
 from dotenv import load_dotenv
+from litellm import completion
 
 from .icons import CHECK, REFRESH, TIMES
 
@@ -15,8 +16,35 @@ class Response(NamedTuple):
     thought: str
 
 
+class _SuppressGeminiBlankTextWarning(logging.Filter):
+    """Filter noisy LiteLLM warning about auto-injected blank text for Gemini."""
+
+    _needle = (
+        "No text in user content. Adding a blank text to user content, "
+        "to ensure Gemini doesn't fail the request."
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return self._needle not in record.getMessage()
+
+
 class APIClient:
-    def __init__(self, prefix: str = "") -> None:
+    def __init__(self, prefix: str = "", use_vertex_api: bool = False) -> None:
+        self._use_vertex_api = use_vertex_api
+
+        if self._use_vertex_api:
+            self._configure_vertex_logging()
+            self._vertex_location = os.environ.get("VERTEX_LOCATION", "global")
+            required_env = ("GOOGLE_APPLICATION_CREDENTIALS", "VERTEX_PROJECT")
+            missing = [key for key in required_env if not os.environ.get(key)]
+            if missing:
+                missing_text = ", ".join(missing)
+                raise ValueError(
+                    "Missing required Vertex AI environment variables: "
+                    f"{missing_text}"
+                )
+            return
+
         base_url_name = prefix.upper() + "_BASE_URL" if prefix else "BASE_URL"
         api_key_name = prefix.upper() + "_API_KEY" if prefix else "API_KEY"
         self._complete_url = os.environ.get(
@@ -31,12 +59,52 @@ class APIClient:
             "Content-Type": "application/json",
         }
 
+    def _configure_vertex_logging(self) -> None:
+        # LiteLLM installs its own DEBUG stream handler; clamp noisy third-party
+        # logger levels when Vertex mode is enabled.
+        noisy_loggers = ("LiteLLM", "litellm", "httpx", "httpcore", "openai", "urllib3")
+        for logger_name in noisy_loggers:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.WARNING)
+
+        # Suppress a known benign LiteLLM Gemini warning spam while preserving
+        # other warnings/errors.
+        litellm_logger = logging.getLogger("LiteLLM")
+        if not any(
+            isinstance(existing_filter, _SuppressGeminiBlankTextWarning)
+            for existing_filter in litellm_logger.filters
+        ):
+            litellm_logger.addFilter(_SuppressGeminiBlankTextWarning())
+
+    def _extract_message_text(self, content: object) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text_parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    text_parts.append(item)
+                    continue
+                if isinstance(item, dict):
+                    text_value = item.get("text")
+                    if isinstance(text_value, str):
+                        text_parts.append(text_value)
+            return "\n".join(text_parts)
+        return str(content)
+
     def _query(
         self, data: dict, logger: logging.Logger | None = None
     ) -> tuple[bool, Response]:
         if logger is None:
             logger = logging.getLogger(__name__)
 
+        if self._use_vertex_api:
+            return self._query_vertex(data, logger)
+        return self._query_http(data, logger)
+
+    def _query_http(
+        self, data: dict, logger: logging.Logger
+    ) -> tuple[bool, Response]:
         logger.debug(f"API Request to: {self._complete_url}")
         logger.debug(f"Model: {data.get('model', 'unknown')}")
 
@@ -71,6 +139,49 @@ class APIClient:
                 extra={"markup": True},
             )
         return False, Response(error, "")
+
+    def _query_vertex(
+        self, data: dict[str, object], logger: logging.Logger
+    ) -> tuple[bool, Response]:
+        model = str(data.get("model", ""))
+        logger.debug("API Request to: Vertex AI via LiteLLM")
+        logger.debug(f"Model: {model}")
+
+        messages = data.get("messages")
+        if not isinstance(messages, list):
+            raise TypeError(f"Expected list for messages, got {type(messages).__name__}")
+
+        kwargs = dict(data)
+        kwargs.pop("model", None)
+        kwargs.pop("messages", None)
+        # Some OpenAI-compatible params are not accepted by Gemini Vertex requests.
+        kwargs.pop("thinking", None)
+
+        try:
+            response = completion(
+                model=model,
+                messages=messages,  # type: ignore[arg-type]
+                vertex_location=self._vertex_location,
+                **kwargs,
+            )
+
+            choices = getattr(response, "choices", None)
+            if not choices:
+                raise ValueError("Vertex response does not include choices")
+            message = choices[0].message
+            content = self._extract_message_text(getattr(message, "content", ""))
+            think = str(getattr(message, "reasoning_content", ""))
+
+            logger.debug(
+                f"Successfully parsed Vertex response. RESP: {content} THINK: {think}"
+            )
+            return True, Response(content, think)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                f"[bold red]{TIMES} Vertex request failed:[/] {exc}",
+                extra={"markup": True},
+            )
+            return False, Response(str(exc), "")
 
     def query(
         self,

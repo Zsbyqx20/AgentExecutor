@@ -75,7 +75,7 @@ class DoubaoScaleWoBAgent(Agent):
         model_name: str,
         task_name: str,
         env_id: str,  # Required for ScaleWoB
-        task_id: int, 
+        task_id: int,
         task_params: dict[str, Any] | None = None,
         language: Literal["CN", "EN"] = "CN",
         headless: bool = False,
@@ -84,6 +84,7 @@ class DoubaoScaleWoBAgent(Agent):
         enable_tracking: bool = False,
         tracking_output_dir: str | Path | None = None,
         max_steps: int | None = None,
+        use_vertex_api: bool = False,
     ) -> None:
         self.device = ScaleWoBDevice(env_id, headless, platform)
         # Initialize base class with ScaleWoB device
@@ -104,7 +105,7 @@ class DoubaoScaleWoBAgent(Agent):
         self.task_params = task_params
         self.window_size = self.device.size
         self.language = Language[language.upper()]
-        self.client = APIClient(prefix=self.name)
+        self.client = APIClient(prefix=self.name, use_vertex_api=use_vertex_api)
         self.history = []
         self.logger = get_logger(__name__)
         self.enable_notepad = enable_notepad
