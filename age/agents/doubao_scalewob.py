@@ -334,7 +334,7 @@ Please make sure you provide correct JSON format when calling `finished(content=
         elif action_type == "scroll":
             x, y = self._normalize_coordinates(*params["point"])
             direction = params["direction"]
-            width, height = self.window_size
+            _, height = self.window_size
             distance = height // 2
             self.logger.debug(f"Scroll direction: {direction}, distance: {distance}")
             self.device.scroll(x, y, Direction[direction.upper()], distance)
