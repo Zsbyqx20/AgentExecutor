@@ -87,6 +87,12 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help='Whether to rerun checkpoint records with status="failed".',
     )
+    parser.add_argument(
+        "--vertex-api",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use Vertex AI API client instead of OpenAI-compatible HTTP endpoint.",
+    )
     return parser.parse_args()
 
 
@@ -209,6 +215,7 @@ def build_agent(
     tracks_dir: str,
     worker_id: str,
     max_steps: int,
+    use_vertex_api: bool,
 ) -> Any:
     agent_map = {
         "doubao": DoubaoScaleWoBAgent,
@@ -232,6 +239,7 @@ def build_agent(
         enable_tracking=True,
         tracking_output_dir=str(Path(tracks_dir) / worker_id),
         max_steps=max_steps,
+        use_vertex_api=use_vertex_api,
     )
 
 
@@ -244,6 +252,7 @@ def run_task(
     max_steps: int,
     tracks_dir: str,
     worker_shards_dir: str,
+    use_vertex_api: bool,
 ) -> dict[str, Any]:
     env_id = str(row["env_id"])
     task_id = int(row["task_id"])
@@ -283,6 +292,7 @@ def run_task(
             tracks_dir=tracks_dir,
             worker_id=worker_id,
             max_steps=max_steps,
+            use_vertex_api=use_vertex_api,
         ) as agent:
             while True:
                 action = agent.predict()
@@ -434,6 +444,7 @@ def main() -> None:
         return
 
     console.print(f"Starting parallel run with {workers} worker(s)...")
+    console.print(f"API backend: {'vertex' if args.vertex_api else 'openai-compatible'}")
 
     futures = {}
     completed_since_sync = 0
@@ -449,6 +460,7 @@ def main() -> None:
                 max_steps=args.max_steps,
                 tracks_dir=args.tracks_dir,
                 worker_shards_dir=args.worker_shards_dir,
+                use_vertex_api=args.vertex_api,
             )
             futures[future] = row
 

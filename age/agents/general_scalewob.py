@@ -227,14 +227,23 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
             scale_text = f"{scale_value[0]}"
         else:
             scale_text = f"{scale_value}"
+        system_prompt = GENERAL_E2E_PROMPT_TEMPLATE.format(
+            goal=self.task_name,
+            scale_factor=scale_text,
+        )
+        if self.task_params:
+            system_prompt += (
+                "\n\n## Answer Format\n"
+                "### Hint: This task requires JSON output in the final answer. "
+                "When using `status` to mark completion, make sure `text` is valid JSON "
+                "matching this schema:\n"
+                f"{self.task_params}"
+            )
 
         messages: list[dict[str, Any]] = [
             {
                 "role": "system",
-                "content": GENERAL_E2E_PROMPT_TEMPLATE.format(
-                    goal=self.task_name,
-                    scale_factor=scale_text,
-                ),
+                "content": system_prompt,
             },
             self._get_user_message(
                 self.history_images[0][0], self.history_images[0][1], self.history_images[0][2]
