@@ -10,7 +10,7 @@ import hashlib
 import io
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 
@@ -71,7 +71,7 @@ class ActionTracker:
         self.additional_metadata = kwargs
 
         # Create task directory with 8-digit hash
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005
+        timestamp = self._utc_now().strftime("%Y%m%d_%H%M%S")
         hash_code = self._generate_hash(task_name)
         self.task_dir = self.output_dir / f"task_{timestamp}_{hash_code}"
         self.task_dir.mkdir(parents=True, exist_ok=True)
@@ -94,7 +94,7 @@ class ActionTracker:
         # Device info for JSON output
         self.screen_size = {"width": screen_size[0], "height": screen_size[1]}
         self.touch_range = {"x_max": touch_range[0], "y_max": touch_range[1]}
-        self.session_start = datetime.now()  # noqa: DTZ005
+        self.session_start = self._utc_now()
 
         self.logger.info(
             f"[cyan]{FOLDER} Tracking directory:[/] {self.task_dir}",
@@ -117,6 +117,8 @@ class ActionTracker:
             duration: Execution time in seconds
         """
         try:
+            timestamp = self._ensure_utc(timestamp)
+
             # Decode base64 screenshot to PIL Image
             image_data = base64.b64decode(screenshot_b64)
             screenshot = Image.open(io.BytesIO(image_data))
@@ -210,7 +212,7 @@ class ActionTracker:
         try:
             device.start_recording(str(self.video_path))
             self.video_enabled = True
-            self.video_start_timestamp = datetime.now()  # noqa: DTZ005
+            self.video_start_timestamp = self._utc_now()
             self.logger.info(
                 f"[cyan]{VIDEO} Video recording started:[/] {self.video_path}",
                 extra={"markup": True},
@@ -287,6 +289,16 @@ class ActionTracker:
         """
         hash_bytes = hashlib.md5(name.encode("utf-8")).digest()
         return hash_bytes[:4].hex()
+
+    def _utc_now(self) -> datetime:
+        """Return the current timezone-aware UTC time."""
+        return datetime.now(UTC)
+
+    def _ensure_utc(self, value: datetime) -> datetime:
+        """Normalize datetimes to timezone-aware UTC for safe arithmetic."""
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
     def _load_font(self) -> None:
         """Load font for screenshot annotations.
@@ -674,7 +686,7 @@ class ActionTracker:
         lines = [
             f"# Task Execution Trace: {self.task_name}",
             "",
-            f"**Generated**: {datetime.now().isoformat()}",  # noqa: DTZ005
+            f"**Generated**: {self._utc_now().isoformat()}",
             f"**Model**: {self.model_name}",
             f"**Language**: {self.language}",
             f"**Total Steps**: {len(self.actions)}",
@@ -906,7 +918,7 @@ class ActionTracker:
         Returns:
             Complete JSON document as string
         """
-        session_end = datetime.now()  # noqa: DTZ005
+        session_end = self._utc_now()
 
         # Convert actions to JSON format
         json_actions = []
@@ -939,7 +951,7 @@ class ActionTracker:
         Returns:
             Complete JSON document as string
         """
-        session_end = datetime.now()  # noqa: DTZ005
+        session_end = self._utc_now()
 
         steps: list[dict] = []
         normalized_actions: list[dict] = []
