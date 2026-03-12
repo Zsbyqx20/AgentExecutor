@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import NamedTuple
+from typing import Any, NamedTuple, cast
 
 import requests
 from dotenv import load_dotenv
@@ -40,8 +40,7 @@ class APIClient:
             if missing:
                 missing_text = ", ".join(missing)
                 raise ValueError(
-                    "Missing required Vertex AI environment variables: "
-                    f"{missing_text}"
+                    f"Missing required Vertex AI environment variables: {missing_text}"
                 )
             return
 
@@ -93,7 +92,7 @@ class APIClient:
         return str(content)
 
     def _query(
-        self, data: dict, logger: logging.Logger | None = None
+        self, data: dict[str, Any], logger: logging.Logger | None = None
     ) -> tuple[bool, Response]:
         if logger is None:
             logger = logging.getLogger(__name__)
@@ -103,7 +102,7 @@ class APIClient:
         return self._query_http(data, logger)
 
     def _query_http(
-        self, data: dict, logger: logging.Logger
+        self, data: dict[str, Any], logger: logging.Logger
     ) -> tuple[bool, Response]:
         logger.debug(f"API Request to: {self._complete_url}")
         logger.debug(f"Model: {data.get('model', 'unknown')}")
@@ -149,7 +148,9 @@ class APIClient:
 
         messages = data.get("messages")
         if not isinstance(messages, list):
-            raise TypeError(f"Expected list for messages, got {type(messages).__name__}")
+            raise TypeError(
+                f"Expected list for messages, got {type(messages).__name__}"
+            )
 
         kwargs = dict(data)
         kwargs.pop("model", None)
@@ -160,9 +161,9 @@ class APIClient:
         try:
             response = completion(
                 model=model,
-                messages=messages,  # type: ignore[arg-type]
+                messages=cast(Any, messages),
                 vertex_location=self._vertex_location,
-                **kwargs,
+                **cast(dict[str, Any], kwargs),
             )
 
             choices = getattr(response, "choices", None)
@@ -186,12 +187,12 @@ class APIClient:
     def query(
         self,
         model: str,
-        messages: list,
+        messages: list[dict[str, Any]],
         timeout: int = 600,
         max_retries: int = 3,
         logger: logging.Logger | None = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> Response:
         if logger is None:
             logger = logging.getLogger(__name__)
 

@@ -3,13 +3,12 @@
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
 
 
 class VideoRecorder:
     """Manages scrcpy subprocess for video recording."""
 
-    def __init__(self, output_path: str, device_serial: Optional[str] = None):
+    def __init__(self, output_path: str, device_serial: str | None = None):
         """
         Initialize video recorder.
 
@@ -19,10 +18,10 @@ class VideoRecorder:
         """
         self.output_path = output_path
         self.device_serial = device_serial
-        self.process: Optional[subprocess.Popen] = None
+        self.process: subprocess.Popen[str] | None = None
         self.is_recording = False
-        self.error_message: Optional[str] = None
-        self.recording_start_time: Optional[float] = None
+        self.error_message: str | None = None
+        self.recording_start_time: float | None = None
 
     def is_available(self) -> bool:
         """
@@ -35,12 +34,14 @@ class VideoRecorder:
             result = subprocess.run(
                 ["which", "scrcpy"],
                 capture_output=True,
+                check=False,
                 text=True,
                 timeout=5,
             )
-            return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
+        else:
+            return result.returncode == 0
 
     def start_recording(self) -> bool:
         """
@@ -86,14 +87,14 @@ class VideoRecorder:
             # Capture the actual recording start time
             self.recording_start_time = time.time()
             self.is_recording = True
-            return True
-
         except FileNotFoundError:
             self.error_message = "scrcpy command not found in PATH"
             return False
-        except Exception as e:
-            self.error_message = f"Failed to start scrcpy: {str(e)}"
+        except (OSError, subprocess.SubprocessError) as e:
+            self.error_message = f"Failed to start scrcpy: {e!s}"
             return False
+        else:
+            return True
 
     def stop_recording(self) -> None:
         """Stop scrcpy recording with graceful shutdown."""
@@ -117,7 +118,7 @@ class VideoRecorder:
                 if stderr_output and self.process.returncode != 0:
                     self.error_message = f"scrcpy error: {stderr_output.strip()}"
 
-        except Exception as e:
-            self.error_message = f"Error stopping scrcpy: {str(e)}"
+        except (OSError, subprocess.SubprocessError) as e:
+            self.error_message = f"Error stopping scrcpy: {e!s}"
         finally:
             self.process = None

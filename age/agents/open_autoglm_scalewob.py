@@ -2,7 +2,7 @@ import ast
 import json
 import re
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -18,7 +18,7 @@ _CN_WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五",
 
 
 def _formatted_date(language: Language) -> str:
-    now = datetime.today()
+    now = datetime.now(UTC)
     if language == Language.CN:
         return now.strftime("%Y年%m月%d日") + f" {_CN_WEEKDAYS[now.weekday()]}"
     return now.strftime("%Y-%m-%d, %A")
@@ -155,13 +155,12 @@ class OpenAutoGLMScaleWoBAgent(DoubaoScaleWoBAgent):
             thought, answer = self._split_thinking_and_action(response_text)
             if thought:
                 self.logger.info(
-                    "\n[bold cyan]{} Thought[/]\n[italic dim]{}[/]\n".format(THOUGHT, thought),
+                    f"\n[bold cyan]{THOUGHT} Thought[/]\n[italic dim]{thought}[/]\n",
                     extra={"markup": True},
                 )
             action = self._parse_answer_action(answer, thought)
             self._consecutive_parse_failures = 0
-            return action
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._consecutive_parse_failures += 1
             self.logger.warning(
                 f"[bold yellow]{WARNING} Failed to parse model action[/] "
@@ -180,6 +179,8 @@ class OpenAutoGLMScaleWoBAgent(DoubaoScaleWoBAgent):
                 params={"seconds": 1},
                 thought=thought or "Parsing failed, waiting briefly before retry.",
             )
+        else:
+            return action
 
     def _split_thinking_and_action(self, response_text: str) -> tuple[str, str]:
         content = response_text.strip()
@@ -336,7 +337,7 @@ class OpenAutoGLMScaleWoBAgent(DoubaoScaleWoBAgent):
         answer = answer.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
         tree = ast.parse(answer, mode="eval")
         if not isinstance(tree.body, ast.Call):
-            raise ValueError("do() is not a valid function call")
+            raise TypeError("do() is not a valid function call")
 
         call = tree.body
         kwargs: dict[str, Any] = {}

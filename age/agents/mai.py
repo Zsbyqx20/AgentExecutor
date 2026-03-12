@@ -211,9 +211,7 @@ class MAIAgent(Agent):
         # Log thought if present
         if thinking:
             self.logger.info(
-                "\n[bold cyan]{} Thought[/]\n[italic dim]{}[/]\n".format(
-                    THOUGHT, thinking
-                ),
+                f"\n[bold cyan]{THOUGHT} Thought[/]\n[italic dim]{thinking}[/]\n",
                 extra={"markup": True},
             )
 
@@ -230,9 +228,7 @@ class MAIAgent(Agent):
         self.logger.debug(f"Parsing MAI action: {action_type}")
 
         # Map MAI actions to internal action types
-        if action_type == "click":
-            params["point"] = args["coordinate"]
-        elif action_type == "long_press":
+        if action_type in {"click", "long_press"}:
             params["point"] = args["coordinate"]
         elif action_type == "type":
             params["content"] = args["text"]

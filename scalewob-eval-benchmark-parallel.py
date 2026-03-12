@@ -20,7 +20,9 @@ from age import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run ScaleWoB benchmark tasks in parallel.")
+    parser = argparse.ArgumentParser(
+        description="Run ScaleWoB benchmark tasks in parallel."
+    )
     parser.add_argument(
         "--input-csv",
         default="data/benchmark_source_20260210.csv",
@@ -131,7 +133,9 @@ def parse_updated_at(value: Any) -> datetime:
         return datetime.min.replace(tzinfo=UTC)
 
 
-def should_replace(old_record: dict[str, Any] | None, new_record: dict[str, Any]) -> bool:
+def should_replace(
+    old_record: dict[str, Any] | None, new_record: dict[str, Any]
+) -> bool:
     if old_record is None:
         return True
     return parse_updated_at(new_record.get("updated_at")) >= parse_updated_at(
@@ -403,7 +407,7 @@ def main() -> None:
     write_output_json(output_json, merged_results)
 
     pending_rows, missing_count, failed_retry_count, skipped_count = build_pending_rows(
-        rows, # type: ignore
+        rows,  # type: ignore
         merged_results,
         rerun_failed=args.rerun_failed,
     )
@@ -439,12 +443,16 @@ def main() -> None:
     )
     if pending_count == 0:
         success = sum(1 for item in merged_results.values() if item.get("success"))
-        rate = round((success * 100 / len(merged_results)), 2) if merged_results else 0.0
+        rate = (
+            round((success * 100 / len(merged_results)), 2) if merged_results else 0.0
+        )
         console.print(f"All tasks done! Success rate: {rate}%")
         return
 
     console.print(f"Starting parallel run with {workers} worker(s)...")
-    console.print(f"API backend: {'vertex' if args.vertex_api else 'openai-compatible'}")
+    console.print(
+        f"API backend: {'vertex' if args.vertex_api else 'openai-compatible'}"
+    )
 
     futures = {}
     completed_since_sync = 0
@@ -507,8 +515,7 @@ def main() -> None:
     total_count = len(merged_results)
     success_rate = round((success_count * 100 / total_count), 2) if total_count else 0.0
     console.print(
-        f"All tasks done! Success rate: {success_rate}% "
-        f"({success_count}/{total_count})"
+        f"All tasks done! Success rate: {success_rate}% ({success_count}/{total_count})"
     )
 
 

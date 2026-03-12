@@ -120,7 +120,7 @@ class RGMAgent(Agent):
             action_history=self._format_action_history(),
         )
 
-        messages = [
+        return [
             {
                 "role": "system",
                 "content": _SYS_PROMPT,
@@ -136,8 +136,6 @@ class RGMAgent(Agent):
                 ],
             },
         ]
-
-        return messages
 
     def _parse_action(self, response_text: str) -> Action:
         """Parse the LLM response to extract the action."""

@@ -114,9 +114,13 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
 
         previous_actions: list[str] = []
         for i in range(history_start_idx):
-            action_summary = self._extract_previous_action_summary(self.history[i]["output"])
+            action_summary = self._extract_previous_action_summary(
+                self.history[i]["output"]
+            )
             previous_actions.append(f"Step {i + 1}: {action_summary}")
-        previous_actions_str = "\n".join(previous_actions) if previous_actions else "None"
+        previous_actions_str = (
+            "\n".join(previous_actions) if previous_actions else "None"
+        )
 
         today = datetime.today()  # noqa: DTZ002
         weekday_names = [
@@ -128,7 +132,9 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
             "Saturday",
             "Sunday",
         ]
-        formatted_date = today.strftime("%Y-%m-%d") + " " + weekday_names[today.weekday()]
+        formatted_date = (
+            today.strftime("%Y-%m-%d") + " " + weekday_names[today.weekday()]
+        )
         instruction_prompt = (
             "Please generate the next move according to the UI screenshot, "
             "instruction and previous actions.\n\n"
@@ -159,51 +165,43 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
                     "image_url": {"url": f"data:image/png;base64,{item['image_b64']}"},
                 }
                 if idx == 0:
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": instruction_prompt},
-                                image_content,
-                            ],
-                        }
-                    )
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": instruction_prompt},
+                            image_content,
+                        ],
+                    })
                 else:
                     messages.append({"role": "user", "content": [image_content]})
-                messages.append(
+                messages.append({
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": item["output"]}],
+                })
+            messages.append({
+                "role": "user",
+                "content": [
                     {
-                        "role": "assistant",
-                        "content": [{"type": "text", "text": item["output"]}],
-                    }
-                )
-            messages.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{current_screenshot_b64}"
-                            },
-                        }
-                    ],
-                }
-            )
-        else:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": instruction_prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{current_screenshot_b64}"
-                            },
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{current_screenshot_b64}"
                         },
-                    ],
-                }
-            )
+                    }
+                ],
+            })
+        else:
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": instruction_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{current_screenshot_b64}"
+                        },
+                    },
+                ],
+            })
 
         return messages
 
@@ -230,7 +228,9 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
             return ast.literal_eval(payload)
 
     def _extract_thought(self, response_text: str) -> str:
-        action_match = re.search(r"Action:\s*(.*?)(?=<tool_call>|\Z)", response_text, re.DOTALL)
+        action_match = re.search(
+            r"Action:\s*(.*?)(?=<tool_call>|\Z)", response_text, re.DOTALL
+        )
         if action_match:
             return action_match.group(1).strip()
         return "Following the planned next UI action."
@@ -245,7 +245,7 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
 
         try:
             tool_call = self._extract_tool_call_payload(response_text)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.warning(
                 f"[bold yellow]{WARNING} Failed to parse tool call[/]: {exc}",
                 extra={"markup": True},
@@ -301,7 +301,10 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
             direction = str(arguments.get("direction", "down"))
             return Action(
                 action_type="scroll",
-                params={"point": tuple(arguments.get("coordinate", [500, 500])), "direction": direction},
+                params={
+                    "point": tuple(arguments.get("coordinate", [500, 500])),
+                    "direction": direction,
+                },
                 thought=thought,
             )
         if action_type == "system_button":
@@ -314,7 +317,9 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
                     f"[bold yellow]{WARNING} system_button '{button}' unsupported on ScaleWoB[/], fallback to wait.",
                     extra={"markup": True},
                 )
-                return Action(action_type="wait", params={"seconds": 1}, thought=thought)
+                return Action(
+                    action_type="wait", params={"seconds": 1}, thought=thought
+                )
             self.logger.warning(
                 f"[bold yellow]{WARNING} Unsupported system_button '{button}'[/], fallback to wait.",
                 extra={"markup": True},
@@ -328,7 +333,9 @@ class MobileAgent35ScaleWoBAgent(DoubaoScaleWoBAgent):
             return Action(action_type="wait", params={"seconds": 1}, thought=thought)
         if action_type == "wait":
             seconds = max(1, int(float(arguments.get("time", 1))))
-            return Action(action_type="wait", params={"seconds": seconds}, thought=thought)
+            return Action(
+                action_type="wait", params={"seconds": seconds}, thought=thought
+            )
         if action_type == "answer":
             return Action(
                 action_type="finished",

@@ -114,48 +114,7 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
         ]
 
         if not self.history_steps:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{current_screenshot_b64}"
-                            },
-                        }
-                    ],
-                }
-            )
-            return messages
-
-        start_image_idx = max(0, len(self.history_steps) - (self.history_n - 1))
-
-        for idx, step in enumerate(self.history_steps):
-            if idx >= start_image_idx:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{step['image_b64']}"
-                                },
-                            }
-                        ],
-                    }
-                )
-
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": step["output"]}],
-                }
-            )
-
-        messages.append(
-            {
+            messages.append({
                 "role": "user",
                 "content": [
                     {
@@ -165,8 +124,41 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
                         },
                     }
                 ],
-            }
-        )
+            })
+            return messages
+
+        start_image_idx = max(0, len(self.history_steps) - (self.history_n - 1))
+
+        for idx, step in enumerate(self.history_steps):
+            if idx >= start_image_idx:
+                messages.append({
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{step['image_b64']}"
+                            },
+                        }
+                    ],
+                })
+
+            messages.append({
+                "role": "assistant",
+                "content": [{"type": "text", "text": step["output"]}],
+            })
+
+        messages.append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{current_screenshot_b64}"
+                    },
+                }
+            ],
+        })
         return messages
 
     def _extract_tagged_payload(self, response_text: str) -> tuple[str, dict[str, Any]]:
@@ -242,8 +234,14 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
                     thought=thought,
                 )
             if action_name == "swipe":
-                point = self._coerce_point(args["coordinate"]) if "coordinate" in args else (500, 500)
-                direction = "down" if str(args.get("direction", "down")) == "up" else "up"
+                point = (
+                    self._coerce_point(args["coordinate"])
+                    if "coordinate" in args
+                    else (500, 500)
+                )
+                direction = (
+                    "down" if str(args.get("direction", "down")) == "up" else "up"
+                )
                 return Action(
                     action_type="scroll",
                     params={"point": point, "direction": direction},
@@ -280,7 +278,9 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
                     ),
                 )
             if action_name == "wait":
-                return Action(action_type="wait", params={"seconds": 1}, thought=thought)
+                return Action(
+                    action_type="wait", params={"seconds": 1}, thought=thought
+                )
             if action_name == "terminate":
                 return Action(
                     action_type="finished",
@@ -301,7 +301,8 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
             return Action(
                 action_type="wait",
                 params={"seconds": 1},
-                thought=thought or "Action payload invalid, waiting briefly before retry.",
+                thought=thought
+                or "Action payload invalid, waiting briefly before retry.",
             )
 
         self.logger.warning(
@@ -378,7 +379,10 @@ class MAIScaleWoBAgent(DoubaoScaleWoBAgent):
                     trace_path, json_path = result
                     self.logger.debug(f"Generated {trace_path} and {json_path}")
 
-        self.history_steps.append({"image_b64": screenshot, "output": response.response})
+        self.history_steps.append({
+            "image_b64": screenshot,
+            "output": response.response,
+        })
         return action
 
 

@@ -15,17 +15,15 @@ from .open_autoglm_scalewob import OpenAutoGLMScaleWoBAgent
 from .rgm import RGMAgent
 
 __all__ = [
-    # Base classes and types
-    "Agent",
     "Action",
-    "Language",
-    # Agent implementations
+    "Agent",
     "DoubaoAgent",
     "DoubaoScaleWoBAgent",
     "GeneralScaleWoBAgent",
+    "Language",
+    "MAIAgent",
+    "MAIScaleWoBAgent",
     "MobileAgent35ScaleWoBAgent",
     "OpenAutoGLMScaleWoBAgent",
-    "MAIScaleWoBAgent",
-    "MAIAgent",
     "RGMAgent",
 ]

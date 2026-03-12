@@ -167,9 +167,7 @@ class DoubaoAgent(Agent):
         # Log thought if present
         if thought:
             self.logger.info(
-                "\n[bold cyan]{} Thought[/]\n[italic dim]{}[/]\n".format(
-                    THOUGHT, thought
-                ),
+                f"\n[bold cyan]{THOUGHT} Thought[/]\n[italic dim]{thought}[/]\n",
                 extra={"markup": True},
             )
 

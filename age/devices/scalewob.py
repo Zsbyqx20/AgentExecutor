@@ -33,7 +33,7 @@ class ScaleWoBDevice(Device):
         try:
             self._auto.close()
             self.logger.info("ScaleWoB automation closed")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error(
                 f"[bold red]{TIMES} Error closing ScaleWoB automation:[/] {e}",
                 extra={"markup": True},
@@ -137,7 +137,7 @@ class ScaleWoBDevice(Device):
                 extra={"markup": True},
             )
             raise
-    
+
     def press_enter(self):
         self.logger.debug("press_enter()")
         try:
@@ -146,7 +146,7 @@ class ScaleWoBDevice(Device):
         except Exception as e:
             self.logger.error(
                 f"[bold red]{TIMES} navigate_back failed:[/] {e}",
-                extra={"markup": True}, 
+                extra={"markup": True},
             )
             raise
 
@@ -181,7 +181,6 @@ class ScaleWoBDevice(Device):
 
         This method exists for compatibility with ActionTracker but does nothing.
         """
-        pass
 
     @property
     def recording_error(self) -> str | None:
@@ -193,4 +192,7 @@ class ScaleWoBDevice(Device):
         return "Video recording not supported on ScaleWoB device"
 
     def eval(self, task_id, params):
-        return self._auto.finish_evaluation(task_id, params=params).get('success', False) is True
+        return (
+            self._auto.finish_evaluation(task_id, params=params).get("success", False)
+            is True
+        )

@@ -163,7 +163,7 @@ class AndroidDevice(Device):
             )
             # Mark as restored by clearing the saved value
             self._original_ime = None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Log but don't raise - this is cleanup code
             self.logger.error(
                 f"[bold red]{TIMES} Failed to restore IME:[/] {e}",
@@ -281,8 +281,7 @@ class AndroidDevice(Device):
             List of similar app names
         """
         all_names = list(self._all_apps.values())
-        similar = get_close_matches(app_name, all_names, n=max_results, cutoff=0.6)
-        return similar
+        return get_close_matches(app_name, all_names, n=max_results, cutoff=0.6)
 
     def open_app(self, app_identifier: str):
         """Open an app by display name or package name.
@@ -433,7 +432,7 @@ class AndroidDevice(Device):
         try:
             if hasattr(self, "_original_ime") and self._original_ime:
                 self.restore_ime()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Destructor should never raise - log if possible, otherwise fail silently
             if hasattr(self, "logger"):
                 self.logger.error(

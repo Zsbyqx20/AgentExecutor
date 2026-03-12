@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import TypedDict
@@ -58,7 +58,7 @@ class Agent(ABC):
             logger=logger,
             screen_size=self.device.size,  # type: ignore
             touch_range=(32767, 32767),
-            **kwargs
+            **kwargs,
         )
         self.tracker.start_video_recording(self.device)  # type: ignore
 
@@ -76,7 +76,7 @@ class Agent(ABC):
             self.tracker.record_action(
                 action=action,
                 screenshot_b64=screenshot_b64,
-                timestamp=datetime.now(),
+                timestamp=datetime.now(UTC),
                 duration=duration,
             )
 
@@ -178,4 +178,4 @@ class Agent(ABC):
         return False  # Don't suppress exceptions
 
 
-__all__ = ["Action", "Language", "Agent"]
+__all__ = ["Action", "Agent", "Language"]

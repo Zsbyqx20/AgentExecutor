@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Analyze average steps used in a benchmark checkpoint.
 
 Filters tasks by source CSV keys, keeps successful tasks only, and resolves
@@ -75,7 +74,9 @@ def load_source_keys(csv_path: Path) -> set[tuple[str, int]]:
         missing = required.difference(reader.fieldnames)
         if missing:
             missing_str = ", ".join(sorted(missing))
-            raise ValueError(f"CSV missing required columns ({missing_str}): {csv_path}")
+            raise ValueError(
+                f"CSV missing required columns ({missing_str}): {csv_path}"
+            )
 
         keys: set[tuple[str, int]] = set()
         for row in reader:
@@ -105,7 +106,9 @@ def load_ckpt(ckpt_path: Path) -> dict[str, Any]:
     return payload
 
 
-def resolve_trace_path(track_dirs: list[Path], worker_id: str, track: str) -> Path | None:
+def resolve_trace_path(
+    track_dirs: list[Path], worker_id: str, track: str
+) -> Path | None:
     for track_dir in track_dirs:
         candidate = track_dir / worker_id / track / "trace.json"
         if candidate.exists():
@@ -201,12 +204,12 @@ def analyze(
     }
 
 
-def _fmt_num(value: float | int | None) -> str:
+def _fmt_num(value: float | None) -> str:
     if value is None:
         return "N/A"
-    if isinstance(value, float):
-        return f"{value:.2f}"
-    return str(value)
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.2f}"
 
 
 def print_report(result: dict[str, Any]) -> None:

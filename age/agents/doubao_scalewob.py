@@ -68,6 +68,20 @@ _USER_INSTRUCTION = """
 {instruction}
 """
 
+_PARSE_ACTION_RETRY_PROMPT = """Your previous response could not be parsed into a valid action.
+Reformat it and return only this exact structure:
+Thought: ...
+Action: ...
+
+Rules:
+- Keep the same intent as your previous response.
+- Output exactly one supported action.
+- Do not add markdown fences or any extra text.
+
+Previous response:
+{response_text}
+"""
+
 
 class DoubaoScaleWoBAgent(Agent):
     def __init__(
@@ -111,6 +125,7 @@ class DoubaoScaleWoBAgent(Agent):
         self.enable_notepad = enable_notepad
         self.notes: list[str] = []
         self.task_status: bool = False
+        self._max_parse_retries = 2
 
     def reset(self, **kwargs) -> None:
         super().reset(**kwargs)  # Reset step counter
@@ -282,6 +297,110 @@ Please make sure you provide correct JSON format when calling `finished(content=
 
         return Action(action_type=action_type, params=params, thought=thought)
 
+    def _validate_action(self, action: Action) -> None:
+        action_type = action["action_type"]
+        if not action_type:
+            raise ValueError("Missing action type")
+
+        required_params = {
+            "click": ("point",),
+            "long_press": ("point",),
+            "type": ("content",),
+            "scroll": ("point", "direction"),
+            "drag": ("start_point", "end_point"),
+            "wait": ("seconds",),
+            "finished": ("content",),
+            "note_create": ("content",),
+            "note_edit": ("index", "content"),
+            "note_remove": ("index",),
+        }
+
+        if action_type not in required_params and action_type not in {
+            "press_enter",
+            "clear_text",
+        }:
+            raise ValueError(f"Unsupported action type: {action_type}")
+
+        missing_params = [
+            param
+            for param in required_params.get(action_type, ())
+            if param not in action["params"]
+        ]
+        if missing_params:
+            raise ValueError(
+                f"Missing params for action '{action_type}': {', '.join(missing_params)}"
+            )
+
+    def _parse_action_with_retry(
+        self, response_text: str, messages: list[dict[str, Any]]
+    ) -> tuple[Action, str]:
+        current_response = response_text
+
+        for attempt in range(self._max_parse_retries + 1):
+            try:
+                action = self._parse_action(current_response)
+                self._validate_action(action)
+            except Exception as exc:  # noqa: BLE001
+                if attempt >= self._max_parse_retries:
+                    self.logger.warning(
+                        f"[bold yellow]{WARNING} Failed to parse action after "
+                        f"{attempt + 1} attempts[/]: {exc}",
+                        extra={"markup": True},
+                    )
+                    return (
+                        Action(
+                            action_type="wait",
+                            params={"seconds": 1},
+                            thought="Parsing failed repeatedly, waiting briefly before retry.",
+                        ),
+                        current_response,
+                    )
+
+                self.logger.warning(
+                    f"[bold yellow]{WARNING} Failed to parse action[/] "
+                    f"(attempt {attempt + 1}/{self._max_parse_retries + 1}): {exc}",
+                    extra={"markup": True},
+                )
+
+                retry_messages = (
+                    self._compress_history()
+                    + messages
+                    + [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": _PARSE_ACTION_RETRY_PROMPT.format(
+                                        response_text=current_response
+                                    ),
+                                }
+                            ],
+                        }
+                    ]
+                )
+
+                start_time = time.time()
+                retry_response = self.client.query(
+                    self.model_name,
+                    retry_messages,
+                    logger=self.logger,
+                )
+                elapsed = time.time() - start_time
+                current_response = retry_response.response
+
+                self.logger.info(
+                    f"[dim]{CHECK} Parse retry response received in {elapsed:.2f}s[/]",
+                    extra={"markup": True},
+                )
+                self.logger.debug(
+                    f"Parse retry response length: {len(current_response)} chars"
+                )
+            else:
+                return action, current_response
+
+        raise RuntimeError("Unreachable parse retry state")
+
     def _execute(self, action: Action) -> tuple[float, bool]:
         """Execute action and return duration.
 
@@ -360,8 +479,10 @@ Please make sure you provide correct JSON format when calling `finished(content=
         elif action_type == "finished":
             if self.task_params:
                 try:
-                    result = self.device.eval(self.task_id, ast.literal_eval(params['content']))
-                except Exception as e:
+                    result = self.device.eval(
+                        self.task_id, ast.literal_eval(params["content"])
+                    )
+                except Exception as e:  # noqa: BLE001
                     self.logger.error(f"Error when evaluation: {e}")
                     result = False
             else:
@@ -436,7 +557,7 @@ Please make sure you provide correct JSON format when calling `finished(content=
     def execute(self, action: Action) -> tuple[float, bool]:
         try:
             duration, status = self._execute(action)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error(f"Error in executing action {action}: {e}")
             duration = -1
             status = False
@@ -555,7 +676,9 @@ Please make sure you provide correct JSON format when calling `finished(content=
         )
         self.logger.debug(f"Response length: {len(response.response)} chars")
 
-        action = self._parse_action(response.response)
+        action, response_text = self._parse_action_with_retry(
+            response.response, messages
+        )
         duration, status = self.execute(action)
 
         # Record action for tracking
@@ -571,6 +694,6 @@ Please make sure you provide correct JSON format when calling `finished(content=
                     self.logger.debug(f"Generated {trace_path} and {json_path}")
 
         self.history.extend(messages)
-        self.history.append({"role": "assistant", "content": response.response})
+        self.history.append({"role": "assistant", "content": response_text})
 
         return action

@@ -111,7 +111,11 @@ def _parse_action_text(plan_output: str) -> tuple[str, str]:
     if len(parts) != 2:
         raise ValueError("Expected exactly one 'Action:' in model output")
     thought_part = parts[0].strip()
-    thought = thought_part[8:].strip() if thought_part.startswith("Thought:") else thought_part
+    thought = (
+        thought_part[8:].strip()
+        if thought_part.startswith("Thought:")
+        else thought_part
+    )
     action_text = parts[1].strip()
     return thought, action_text
 
@@ -189,7 +193,9 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
         self.history_responses = []
         self.actions = []
 
-    def _get_user_message(self, screenshot_b64: str, _tool_call: Any, _ask_user: Any) -> dict[str, Any]:
+    def _get_user_message(
+        self, screenshot_b64: str, _tool_call: Any, _ask_user: Any
+    ) -> dict[str, Any]:
         return {
             "role": "user",
             "content": [
@@ -200,7 +206,9 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
             ],
         }
 
-    def _hide_history_images(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _hide_history_images(
+        self, messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         num_images_used = 0
         for i in range(len(messages)):
             reverse_i = len(messages) - i - 1
@@ -246,20 +254,24 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
                 "content": system_prompt,
             },
             self._get_user_message(
-                self.history_images[0][0], self.history_images[0][1], self.history_images[0][2]
+                self.history_images[0][0],
+                self.history_images[0][1],
+                self.history_images[0][2],
             ),
         ]
 
         for idx, history_resp in enumerate(self.history_responses):
-            history_img_data, tool_call_res, ask_user_response_res = self.history_images[idx + 1]
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": history_resp.get("content", "")}],
-                }
+            history_img_data, tool_call_res, ask_user_response_res = (
+                self.history_images[idx + 1]
             )
+            messages.append({
+                "role": "assistant",
+                "content": [{"type": "text", "text": history_resp.get("content", "")}],
+            })
             messages.append(
-                self._get_user_message(history_img_data, tool_call_res, ask_user_response_res)
+                self._get_user_message(
+                    history_img_data, tool_call_res, ask_user_response_res
+                )
             )
         return self._hide_history_images(messages)
 
@@ -278,7 +290,9 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
         norm_y = int(float(y) * 1000 / float(scale_y))
         return norm_x, norm_y
 
-    def _convert_to_scale_wob_action(self, thought: str, action_data: dict[str, Any]) -> Action:
+    def _convert_to_scale_wob_action(
+        self, thought: str, action_data: dict[str, Any]
+    ) -> Action:
         original_action_type = str(action_data.get("action_type", "")).strip()
         action_type = normalize_action_type(original_action_type)
         if not action_type:
@@ -293,7 +307,9 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
             if isinstance(coordinate, list) and len(coordinate) == 2:
                 x, y = self._to_norm_1000(float(coordinate[0]), float(coordinate[1]))
                 mapped_type = "click" if action_type == "double_tap" else action_type
-                return Action(action_type=mapped_type, params={"point": (x, y)}, thought=thought)
+                return Action(
+                    action_type=mapped_type, params={"point": (x, y)}, thought=thought
+                )
             return Action(action_type="wait", params={"seconds": 1}, thought=thought)
 
         if action_type == "drag":
@@ -308,7 +324,9 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
                 start_x, start_y = self._to_norm_1000(
                     float(start_coordinate[0]), float(start_coordinate[1])
                 )
-                end_x, end_y = self._to_norm_1000(float(end_coordinate[0]), float(end_coordinate[1]))
+                end_x, end_y = self._to_norm_1000(
+                    float(end_coordinate[0]), float(end_coordinate[1])
+                )
                 return Action(
                     action_type="drag",
                     params={
@@ -345,7 +363,11 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
                     "content": (
                         status_text
                         if status_text
-                        else ("task finished" if goal_status == "complete" else "task failed")
+                        else (
+                            "task finished"
+                            if goal_status == "complete"
+                            else "task failed"
+                        )
                     )
                 },
                 thought=thought,
@@ -354,7 +376,10 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
             # Deprecated in prompt; keep compatibility with older model responses.
             return Action(
                 action_type="finished",
-                params={"content": str(action_data.get("text", "")).strip() or "task finished"},
+                params={
+                    "content": str(action_data.get("text", "")).strip()
+                    or "task finished"
+                },
                 thought=thought,
             )
         if action_type == "wait":
@@ -364,7 +389,8 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
         return Action(
             action_type="wait",
             params={"seconds": 1},
-            thought=thought or f"Unsupported action '{action_type}' in ScaleWoB; waiting briefly.",
+            thought=thought
+            or f"Unsupported action '{action_type}' in ScaleWoB; waiting briefly.",
         )
 
     def _parse_action(self, response_text: str) -> Action:
@@ -452,8 +478,11 @@ class GeneralScaleWoBAgent(DoubaoScaleWoBAgent):
                     trace_path, json_path = result
                     self.logger.debug(f"Generated {trace_path} and {json_path}")
 
-        self.history_responses.append({"role": "assistant", "content": response.response})
-        self.actions.append(action) # type: ignore
+        self.history_responses.append({
+            "role": "assistant",
+            "content": response.response,
+        })
+        self.actions.append(action)  # type: ignore
         return action
 
 

@@ -24,19 +24,19 @@ setup_logging(
 )
 
 __all__ = [
-    "Device",
-    "AndroidDevice",
     "APIClient",
+    "Action",
     "Agent",
+    "AndroidDevice",
+    "Device",
     "DoubaoAgent",
-    "MAIAgent",
-    "MAIScaleWoBAgent",
     "DoubaoScaleWoBAgent",
     "GeneralScaleWoBAgent",
+    "Language",
+    "MAIAgent",
+    "MAIScaleWoBAgent",
     "MobileAgent35ScaleWoBAgent",
     "OpenAutoGLMScaleWoBAgent",
     "RGMAgent",
-    "Action",
-    "Language",
     "setup_logging",
 ]
