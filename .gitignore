@@ -1,6 +1,12 @@
 tracks/
 data/
 draft/
+tracks*
+*.json
+*.sh
+scalewob-eval.py
+scalewob-eval-benchmark.py
+demo_scalewob.py
 
 # General
 .DS_Store

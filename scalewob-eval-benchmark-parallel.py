@@ -13,6 +13,7 @@ from scalewob import ScaleWoBAutomation
 from age import (
     DoubaoScaleWoBAgent,
     GeneralScaleWoBAgent,
+    GPT54ScaleWoBAgent,
     MAIScaleWoBAgent,
     MobileAgent35ScaleWoBAgent,
     OpenAutoGLMScaleWoBAgent,
@@ -72,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--agent",
-        choices=["doubao", "general", "open-autoglm", "mobileagent35", "mai"],
+        choices=["doubao", "general", "gpt54", "open-autoglm", "mobileagent35", "mai"],
         default="doubao",
         help="Agent backend to use.",
     )
@@ -220,6 +221,7 @@ def build_agent(
     agent_map = {
         "doubao": DoubaoScaleWoBAgent,
         "general": GeneralScaleWoBAgent,
+        "gpt54": GPT54ScaleWoBAgent,
         "open-autoglm": OpenAutoGLMScaleWoBAgent,
         "mobileagent35": MobileAgent35ScaleWoBAgent,
         "mai": MAIScaleWoBAgent,
