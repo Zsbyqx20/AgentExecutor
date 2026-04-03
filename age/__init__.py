@@ -1,6 +1,7 @@
 from .agents import (
     Action,
     Agent,
+    BrownieScaleWoBAgent,
     DoubaoAgent,
     DoubaoScaleWoBAgent,
     GeneralScaleWoBAgent,
@@ -10,6 +11,7 @@ from .agents import (
     MobileAgent35ScaleWoBAgent,
     OpenAutoGLMScaleWoBAgent,
     RGMAgent,
+    RGMScaleWoBAgent,
 )
 from .api import APIClient
 from .devices import AndroidDevice, Device
@@ -28,6 +30,7 @@ __all__ = [
     "Action",
     "Agent",
     "AndroidDevice",
+    "BrownieScaleWoBAgent",
     "Device",
     "DoubaoAgent",
     "DoubaoScaleWoBAgent",
@@ -38,5 +41,6 @@ __all__ = [
     "MobileAgent35ScaleWoBAgent",
     "OpenAutoGLMScaleWoBAgent",
     "RGMAgent",
+    "RGMScaleWoBAgent",
     "setup_logging",
 ]
