@@ -1,6 +1,7 @@
 from .agents import (
     Action,
     Agent,
+    BrownieAgent,
     BrownieScaleWoBAgent,
     DoubaoAgent,
     DoubaoScaleWoBAgent,
@@ -30,6 +31,7 @@ __all__ = [
     "Action",
     "Agent",
     "AndroidDevice",
+    "BrownieAgent",
     "BrownieScaleWoBAgent",
     "Device",
     "DoubaoAgent",

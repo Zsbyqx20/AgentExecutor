@@ -222,6 +222,11 @@ class AndroidDevice(Device):
         self._device.shell(["am", "broadcast", "-a", "ADB_CLEAR_TEXT"])
         time.sleep(1)
 
+    def press_enter(self):
+        self.logger.debug("press_enter()")
+        self._device.keyevent("ENTER")
+        time.sleep(1)
+
     def drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration: float):
         self.logger.debug(
             f"drag({start_x}, {start_y}) → ({end_x}, {end_y}), {duration}s"

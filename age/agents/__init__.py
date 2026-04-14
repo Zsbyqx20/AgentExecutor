@@ -5,6 +5,7 @@ GUI automation tasks on Android devices.
 """
 
 from .base import Action, Agent, Language
+from .brownie import BrownieAgent
 from .brownie_scalewob import BrownieScaleWoBAgent
 from .doubao import DoubaoAgent
 from .doubao_scalewob import DoubaoScaleWoBAgent
@@ -19,6 +20,7 @@ from .rgm_scalewob import RGMScaleWoBAgent
 __all__ = [
     "Action",
     "Agent",
+    "BrownieAgent",
     "BrownieScaleWoBAgent",
     "DoubaoAgent",
     "DoubaoScaleWoBAgent",

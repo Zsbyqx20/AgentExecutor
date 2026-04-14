@@ -263,11 +263,15 @@ class BrownieScaleWoBAgent(DoubaoScaleWoBAgent):
                 thought=thought or "Waiting briefly for the UI to update.",
             )
         if method_name == "end_task":
-            if len(args) != 1:
+            if len(args) == 0:
                 raise ValueError("device.end_task requires a status")
+            if len(args) == 2:
+                answer = args[1]
+            else:
+                answer = args[0]
             return Action(
                 action_type="finished",
-                params={"content": str(args[0])},
+                params={"content": str(answer)},
                 thought=thought,
             )
         if method_name == "note":

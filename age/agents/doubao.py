@@ -1,3 +1,4 @@
+import random
 import re
 import time
 from pathlib import Path
@@ -37,6 +38,7 @@ click(point='<point>x1 y1</point>')
 long_press(point='<point>x1 y1</point>')
 type(content='') #If you want to submit your input, use "\\n" at the end of `content`.
 clear_text() # Clear all text in the currently activated textbox
+press_enter() # Press Enter key or submit the active input
 scroll(point='<point>x1 y1</point>', direction='down or up or right or left')
 drag(start_point='<point>x1 y1</point>', end_point='<point>x2 y2</point>')
 press_home()
@@ -161,7 +163,14 @@ class DoubaoAgent(Agent):
             r"Action:\s*(.*?)(?=\n\n|\Z)", response_text, re.DOTALL
         )
 
-        thought = thought_match.group(1).strip() if thought_match else ""
+        if thought_match:
+            thought = thought_match.group(1).strip()
+        elif action_match:
+            # No "Thought:" prefix — treat everything before "Action:" as the thought
+            pre_action = response_text[: action_match.start()].strip()
+            thought = pre_action if pre_action else ""
+        else:
+            thought = ""
         action_text = action_match.group(1).strip() if action_match else ""
 
         # Log thought if present
@@ -238,6 +247,8 @@ class DoubaoAgent(Agent):
                 action_type = "press_home"
             elif action_text == "press_back()":
                 action_type = "press_back"
+            elif action_text == "press_enter()":
+                action_type = "press_enter"
             elif action_text == "clear_text()":
                 action_type = "clear_text"
             elif action_text.startswith("wait("):
@@ -295,6 +306,7 @@ class DoubaoAgent(Agent):
             "scroll": "yellow",
             "drag": "purple",
             "open_app": "cyan",
+            "press_enter": "magenta",
             "press_home": "magenta",
             "press_back": "magenta",
             "wait": "dim",
@@ -336,8 +348,24 @@ class DoubaoAgent(Agent):
         elif action_type == "drag":
             start_x, start_y = self._normalize_coordinates(*params["start_point"])
             end_x, end_y = self._normalize_coordinates(*params["end_point"])
-            self.logger.debug(f"Drag: ({start_x}, {start_y}) → ({end_x}, {end_y})")
-            self.device.drag(start_x, start_y, end_x, end_y, duration=1.0)
+            # patch
+            if start_x == 0:
+                self.logger.debug(f"Scroll right from: ({end_x}, {end_y})")
+                self.device.scroll(end_x, end_y, Direction.RIGHT, 500)
+            elif start_y == 0:
+                self.logger.debug(f"Scroll down from: ({end_x}, {end_y})")
+                self.device.scroll(end_x, end_y, Direction.UP, 500)
+            elif start_x == self.window_size[0]:
+                self.logger.debug(f"Scroll left from: ({end_x}, {end_y})")
+                self.device.scroll(end_x, end_y, Direction.LEFT, 500)
+            elif start_y == self.window_size[1]:
+                self.logger.debug(f"Scroll up from: ({end_x}, {end_y})")
+                self.device.scroll(end_x, end_y, Direction.DOWN, 500)
+            else:
+                self.logger.debug(f"Drag: ({start_x}, {start_y}) → ({end_x}, {end_y})")
+                self.device.drag(start_x, start_y, end_x, end_y, duration=1.0)
+        elif action_type == "press_enter":
+            self.device.press_enter()
         elif action_type == "press_home":
             self.device.navigate_home()
         elif action_type == "press_back":

@@ -249,8 +249,7 @@ class MAIAgent(Agent):
             elif button == "menu":
                 action_type = "press_menu"
             elif button == "enter":
-                action_type = "type"
-                params["content"] = "\n"
+                action_type = "press_enter"
         elif action_type == "wait":
             # No additional params needed
             pass
@@ -340,6 +339,8 @@ class MAIAgent(Agent):
             end_x, end_y = self._normalize_coordinates(*params["end_point"])
             self.logger.debug(f"Drag: ({start_x}, {start_y}) → ({end_x}, {end_y})")
             self.device.drag(start_x, start_y, end_x, end_y, duration=1.0)
+        elif action_type == "press_enter":
+            self.device.press_enter()
         elif action_type == "press_home":
             self.device.navigate_home()
         elif action_type == "press_back":
