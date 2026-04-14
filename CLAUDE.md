@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**age** (Android GUI Executor) is a Python framework for AI-powered Android GUI automation. It uses computer vision and LLMs to perform tasks on Android devices via ADB.
+**age** (Android GUI Executor) is a Python framework for AI-powered Android/web GUI automation. It uses LLM vision models to perform tasks on Android devices via ADB, or web environments via ScaleWoB.
 
 ## Common Development Commands
 
@@ -18,171 +18,131 @@ poe format
 # Auto-fix linting issues
 poe fix
 
-# Apply unsafe fixes
-poe fix_unsafe
+# Run tests
+python -m pytest tests/
+
+# Run a single test file
+python -m pytest tests/test_brownie_agent.py -v
 ```
 
 ## Architecture
 
-The codebase follows a three-layer architecture:
+The codebase has three layers: API client, devices, and agents.
 
-### Supporting Modules (`age/`)
-
-- **`logging_config.py`** - Centralized logging configuration with dual-output setup
-- **`logger.py`** - Logger factory for consistent logger instances
-- **`icons.py`** - Nerd Font icons for terminal output
-- **`tracker.py`** - Action tracking system for generating execution traces with annotated screenshots
-- **`video_recorder.py`** - Scrcpy-based video recording for screen capture
-
-### Core Modules (`age/`)
-
-1. **`device.py`** - Device Interface Layer
-   - Manages ADB communication with Android devices
-   - Auto-detects devices or uses specified `device_id`
-   - Handles screenshots (PIL Image or base64), touch input, text entry, navigation
-   - Automatically sets ADB keyboard as IME for text input
-   - Maintains app name-to-package mapping with fuzzy matching for flexible app launching
-   - Integrated `VideoRecorder` for scrcpy-based screen recording (gracefully handles scrcpy unavailability)
-
-2. **`api.py`** - API Client Layer
-   - Generic LLM API client (OpenAI-compatible)
-   - Reads `BASE_URL` and `API_KEY` from environment variables
-   - Built-in retry logic (max 3 retries)
-
-3. **`agent.py`** - Agent Logic Layer
-   - `Agent` (abstract base class) - extensible for different LLM providers
-   - `DoubaoAgent` - concrete implementation for Doubao/Ark models
-   - Orchestrates the predict-execute loop: screenshot → LLM → parse action → execute
-   - Implements notepad functionality for persistent note-taking during task execution
-   - Includes wait action for pausing during loading screens
-   - Optional action tracking for generating execution traces with annotated screenshots
-
-### Execution Flow
+### Package Structure
 
 ```
-DoubaoAgent.predict()
-  ├─ capture_screenshot() → base64 image
-  ├─ client.query(model, messages) → LLM response
-  ├─ _parse_action(response_text) → Action dict
-  └─ _execute(action) → Device interaction
+age/
+├── __init__.py          # Re-exports all public types; initializes logging on import
+├── api.py               # APIClient — HTTP and Vertex AI LLM backends
+├── tracker.py           # ActionTracker — screenshots + execution traces
+├── video_recorder.py    # Scrcpy-based video recording
+├── devices/
+│   ├── base.py          # Device ABC + Direction enum
+│   ├── android.py       # AndroidDevice — ADB via adbutils
+│   └── scalewob.py      # ScaleWoBDevice — web automation via scalewob package
+└── agents/
+    ├── base.py          # Agent ABC — tracking, step limiting, context manager
+    ├── doubao.py        # DoubaoAgent — Doubao/Ark models, Android
+    ├── mai.py           # MAIAgent — XML tool-call format, Android
+    ├── rgm.py           # RGMAgent — function-call JSON format, Android
+    ├── brownie.py       # BrownieAgent — device.* code-style prompt, Android
+    ├── doubao_scalewob.py     # DoubaoScaleWoBAgent — ScaleWoB variant
+    ├── mai_scalewob.py        # MAIScaleWoBAgent
+    ├── rgm_scalewob.py        # RGMScaleWoBAgent
+    ├── brownie_scalewob.py    # BrownieScaleWoBAgent
+    ├── general_scalewob.py    # GeneralScaleWoBAgent
+    ├── open_autoglm_scalewob.py
+    └── mobileagent35_scalewob.py
 ```
+
+### Device Layer
+
+`Device` (ABC) defines the interface all devices implement:
+- `capture_screenshot(format: "PIL" | "B64")` — returns PIL Image or base64 string
+- `size` property — returns `(width, height)` in pixels
+
+**`AndroidDevice`** (`devices/android.py`):
+- Connects via ADB using `adbutils`; auto-selects first device if `device_id=None`
+- On context manager entry (`__enter__`), switches IME to `com.android.adbkeyboard/.AdbIME`; restores original IME on exit
+- Resolves app names to packages via a content provider (`com.mobilellm.appscan.provider`), with case-insensitive and fuzzy matching fallback
+
+**`ScaleWoBDevice`** (`devices/scalewob.py`):
+- Wraps `ScaleWoBAutomation` from the `scalewob` package
+- Used for web-based task evaluation; video recording always returns `False`
+- Hardcoded `size`: `(3840, 2400)` desktop / `(1170, 2532)` mobile
+
+### Agent Layer
+
+`Agent` (ABC in `agents/base.py`) provides:
+- Tracking lifecycle: `_init_tracker()`, `_record_action()`, `_finalize_tracking()`
+- Step limiting: `_check_step_limit()` — returns a forced `finished` Action when `max_steps` exceeded
+- Context manager: delegates device `__enter__`/`__exit__` and finalizes tracking on exit
+
+**Always use agents as context managers** to ensure IME restoration and tracking finalization:
+```python
+with DoubaoAgent(model_name="...", task_name="...") as agent:
+    while True:
+        action = agent.predict()
+        if action["action_type"] == "finished":
+            break
+```
+
+#### Agent Variants and Prompt Formats
+
+| Agent | Prompt format | History strategy |
+|-------|--------------|-----------------|
+| `DoubaoAgent` | `Thought: / Action: func(args)` | Sliding window (last 5 screenshots) |
+| `MAIAgent` | `<thinking>...</thinking> <tool_call>{json}</tool_call>` | Configurable `history_n` (default 3) |
+| `RGMAgent` | System prompt with tool schema; `<tool_call>` in response | Stateless per-turn (no history) |
+| `BrownieAgent` | `Thought: / Action: \`device.method()\`` | Step log (thought+action strings) |
+
+`*ScaleWoBAgent` variants are identical in prompt format but use `ScaleWoBDevice` and call `device.eval(task_id, params)` on `finished` to get a success/failure grade.
+
+### API Client (`api.py`)
+
+`APIClient` supports two backends, selected per-instance:
+- **HTTP** (default): OpenAI-compatible REST endpoint; reads `{PREFIX}_BASE_URL` and `{PREFIX}_API_KEY` from env (e.g. `DOUBAO_BASE_URL`, `DOUBAO_API_KEY`)
+- **Vertex AI** (`use_vertex_api=True`): routes through LiteLLM; requires `GOOGLE_APPLICATION_CREDENTIALS`, `VERTEX_PROJECT`, optionally `VERTEX_LOCATION`
+
+Each agent passes its `name` as `prefix` to `APIClient`, so different agents can use different API endpoints from the same `.env`.
 
 ### Coordinate System
 
-The LLM uses normalized coordinates (0-1000 scale) which are converted to actual device pixels in `_normalize_coordinates()`. This abstraction allows the same prompts to work across different screen sizes.
-
-### Action Space
-
-Defined in the prompt components (`_BASE_ACTIONS`, `_NOTE_ACTIONS`, `_FINISHED_ACTION`):
-- `click(point)`, `long_press(point)`
-- `type(content)` - use `\n` for submit
-- `scroll(point, direction)`
-- `drag(start_point, end_point)`
-- `press_home()`, `press_back()`
-- `open_app(app_name)` - with fuzzy matching support
-- `wait(seconds)` - for pausing during loading screens
-- `note_create/edit/remove(content)` - for persistent note-taking (optional feature)
-- `finished(content)` - terminates the task loop
-
-### Logging System
-
-The project uses a professional dual-output logging system with Rich:
-- **Console**: Clean INFO+ level output with colored Nerd Font icons
-- **Files**: Detailed DEBUG+ logs with full context in `logs/` directory
-  - `agent_debug.log` - All debug logs (10MB per file, 5 backups)
-  - `agent_errors.log` - Error-only logs (10MB per file, 10 backups)
-- Configurable via `setup_logging()` in `logging_config.py`
-
-### History Management
-
-The `_compress_history()` method implements a sliding window for screenshots, keeping only the last 5 screenshots to manage token usage while maintaining conversation context.
+All agents use a **0–1000 normalized coordinate scale** in prompts (except `MAIAgent` which uses 0–999). `_normalize_coordinates(x, y)` converts to device pixels. The abstraction lets the same prompt templates work across devices with different resolutions.
 
 ### Action Tracking System
 
-The `ActionTracker` class provides automatic action execution tracing with annotated screenshots and video recording.
-
-**Features:**
-- Records each action with timestamp, parameters, and LLM thought
-- Annotates screenshots with visual markers showing where actions occurred
-- Records video of entire task execution
-- Generates markdown and JSON execution traces
-
-**Usage:**
-```python
-from age.agent import DoubaoAgent
-
-agent = DoubaoAgent(
-    model_name="doubao-seed-1-6-vision-250815",
-    task_name="在设置中开启深色模式",
-    enable_tracking=True,  # Enable action tracking (includes video)
-    tracking_output_dir="./tracks",  # Optional: custom output directory
-)
-
-# Run the task loop
-while True:
-    action = agent.predict()
-    if action["action_type"] == "finished":
-        break
-
-# Trace and video automatically saved to tracks/task_YYYYMMDD_HHMMSS_<name>/
+When `enable_tracking=True`, `ActionTracker` captures annotated screenshots and a video (via scrcpy) for every step. Output is saved to:
 ```
-
-**Output Structure:**
+tracks/task_YYYYMMDD_HHMMSS_<name>/
+├── trace.md, actions.json, trace.json
+├── recording.mp4
+└── screenshots/step_NNN_<action>.png
 ```
-tracks/
-└── task_20241224_201530_open_settings/
-    ├── trace.md              # Markdown execution trace with video section
-    ├── actions.json          # Backward-compatible normalized action events
-    ├── trace.json            # Rich machine-readable trace (thoughts + artifacts)
-    ├── recording.mp4         # Video of entire task execution
-    └── screenshots/
-        ├── step_001_open_app.png
-        ├── step_001_open_app_raw.png
-        ├── step_002_click.png
-        ├── step_002_click_raw.png
-        └── ...
-```
-
-**Video Recording:**
-- Uses scrcpy for reliable screen capture (requires scrcpy installation)
-- Starts automatically when tracking is enabled
-- Records entire task execution from start to finish
-- Saved as MP4 format in task directory
-- Referenced in markdown trace with embedded HTML5 video player
-- Gracefully handles recording failures (e.g., scrcpy not installed) without disrupting task execution
-
-**Action Visualizations:**
-- Click/Long Press: Green circle with center dot
-- Scroll: Yellow circle with directional arrow
-- Drag: Green start point, red end point, purple connecting line
-- Type: Blue keyboard area with text preview
-- System Actions (Home/Back/Open App): Centered text overlay
-- Wait: Clock icon with seconds label
-- Notepad: Note icon with content preview
+Tracking is finalized automatically on `finished` action or on context manager exit.
 
 ## Environment Setup
 
 Required in `.env`:
 ```
-BASE_URL=https://api.openai.com/v1/chat/completions  # or custom endpoint
-API_KEY=your_api_key_here
+# Per-agent prefix pattern (e.g., DOUBAO_BASE_URL, RGM_API_KEY)
+{AGENT_NAME}_BASE_URL=https://...
+{AGENT_NAME}_API_KEY=your_key
+
+# Or generic fallback
+BASE_URL=https://api.openai.com/v1/chat/completions
+API_KEY=your_api_key
+
+# For Vertex AI
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/creds.json
+VERTEX_PROJECT=my-project
+VERTEX_LOCATION=us-central1
 ```
 
 ## ADB Requirements
 
 - Android device connected via ADB
-- ADB keyboard (`com.android.adbkeyboard/.AdbIME`) will be automatically enabled
-- Device auto-selection uses the first available device if `device_id` is not specified
-- **scrcpy** (optional) - Required for video recording in action tracking; gracefully degrades if not installed
-
-## Dependencies
-
-- `adbutils` - ADB communication
-- `aiohttp` - Async HTTP client
-- `httpx[socks]` - HTTP client with SOCKS support
-- `PIL` - Image processing
-- `requests` - HTTP client for LLM API
-- `python-dotenv` - Environment configuration
-- `rich` - Professional terminal output and logging
-
-The project uses `uv` for dependency management with a locked `uv.lock` file.
+- `com.android.adbkeyboard/.AdbIME` installed for text input (auto-enabled by `AndroidDevice`)
+- `com.mobilellm.appscan.provider` content provider installed for app name resolution
+- **scrcpy** (optional) — required for video recording; gracefully degrades if absent
